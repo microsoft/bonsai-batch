@@ -1,0 +1,26 @@
+# User vscode config
+.vscode/
+
+# Vim files
+*.sw[l-p]
+
+# Python intermediate files
+*.pyc
+**/__pycache__/*
+
+# Packaging files
+cs_batch_orchestration.egg-info/*
+build
+dist
+ˇ
+# User conf files
+*.conf
+etc/
+.DS_Store
+newconf.ini
+.env
+configs/userconfig.ini
+
+# logs
+logs/
+*.log
