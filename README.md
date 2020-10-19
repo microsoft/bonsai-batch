@@ -1,4 +1,4 @@
-# Project
+# Batch Orchestration for Bonsai Simulations
 
 ## Overview
 
