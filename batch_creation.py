@@ -25,15 +25,6 @@ formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
 console.setFormatter(formater)
 logging.getLogger().addHandler(console)
 
-# Add file rotating handler, with level DEBUG
-rotatingHandler = logging.FileHandler(
-    filename=os.path.join("logs", "batch_creation.log"), mode="a"
-)
-rotatingHandler.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-rotatingHandler.setFormatter(formatter)
-logging.getLogger().addHandler(rotatingHandler)
-
 logger = logging.getLogger(__name__)
 
 default_config = os.path.join("configs", "config.ini")

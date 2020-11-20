@@ -41,13 +41,6 @@ logging.getLogger().addHandler(console)
 
 # Add file rotating handler, with level DEBUG
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-fileHandler = logging.FileHandler(
-    filename=os.path.join("logs", "batch_runs.log"), mode="a"
-)
-fileHandler.setLevel(logging.DEBUG)
-fileHandler.setFormatter(formatter)
-
-logging.getLogger().addHandler(fileHandler)
 
 logger = logging.getLogger(__name__)
 
@@ -76,13 +69,13 @@ class AzureBatchContainers(object):
         if not pathlib.Path(self.config_file).exists():
             raise ValueError("No config file found at {0}".format(self.config_file))
         else:
-            logging.debug("Using config from {}".format(self.config_file))
+            logger.debug("Using config from {}".format(self.config_file))
             self.config.read(self.config_file)
             self.get_container_registry()
             self.get_image_ref()
 
             if service_principal:
-                logging.info("Authenticating with service principal...")
+                logger.info("Authenticating with service principal...")
                 tenant_id = self.config["SERVICE"]["TENANT_ID"]
                 client_id = self.config["SERVICE"]["CLIENT_ID"]
                 secret = self.config["SERVICE"]["SECRET"]
@@ -102,6 +95,8 @@ class AzureBatchContainers(object):
                 workspace, access_key = load_bonsai_env(".env")
             self.workspace = workspace
             self.access_key = access_key
+            # pool needs to be created before fileshare can be activated
+            self.use_fileshare = False
 
     def get_container_registry(self):
         """Creates an attribute called registry which attaches to your ACR account provided in config.
@@ -201,6 +196,7 @@ class AzureBatchContainers(object):
         pool_low_priority_node_count = int(self.config["POOL"]["LOW_PRI_NODES"])
         pool_dedicated_node_count = int(self.config["POOL"]["DEDICATED_NODES"])
         node_agent_sku = self.config["POOL"]["AGENT_SKU"].strip("'")
+        self.use_fileshare = use_fileshare
 
         container_conf = batch.models.ContainerConfiguration(
             container_image_names=[self.image_name + ":" + self.image_version],
@@ -219,9 +215,11 @@ class AzureBatchContainers(object):
                     azure_file_url=self.config["STORAGE"]["URL"],
                     account_key=self.config["STORAGE"]["ACCOUNT_KEY"],
                     relative_mount_path=self.mount_path,
+                    mount_options="/persistent:Yes",
                 )
             )
-            logging.info(f"Using fileshare mount {fileshare_mount}")
+            logger.info(f"Using fileshare mount {fileshare_mount}")
+            fileshare_mount = [fileshare_mount]
         else:
             fileshare_mount = None
 
@@ -236,21 +234,21 @@ class AzureBatchContainers(object):
             max_tasks_per_node=num_tasks_per_node,
             target_dedicated_nodes=pool_dedicated_node_count,
             target_low_priority_nodes=pool_low_priority_node_count,
-            mount_configuration=[fileshare_mount],
+            mount_configuration=fileshare_mount,
         )
 
         if not skip_if_exists or not self.batch_client.pool.exists(pool_id):
-            logging.warning("Creating new pool named {}".format(pool_id))
+            logger.warning("Creating new pool named {}".format(pool_id))
             self.batch_client.pool.add(self.new_pool)
         else:
-            logging.warning("Pool exists, re-using {}".format(pool_id))
+            logger.warning("Pool exists, re-using {}".format(pool_id))
 
         # update pool id for jobs
         self.pool_id = pool_id
 
     def delete_pool(self, pool_name):
 
-        logging.info("Deleting pool: {0}".format(pool_name))
+        logger.info("Deleting pool: {0}".format(pool_name))
         self.batch_client.pool.delete(pool_name)
 
     def add_job(self, job_name: str = None):
@@ -269,17 +267,31 @@ class AzureBatchContainers(object):
             id=self.job_id, pool_info=batch.models.PoolInformation(pool_id=self.pool_id)
         )
 
-        logging.info("Adding job {0} to pool {1}".format(self.job_id, self.pool_id))
+        logger.info("Adding job {0} to pool {1}".format(self.job_id, self.pool_id))
         self.batch_client.job.add(job)
 
     def delete_job(self, job_name: str = None):
         """Deletes a job that already exists in an Azure Batch Pool in self.pool_id. Job is specified using config['POOL'] parameters."""
         self.batch_client.job.delete(job_name)
 
+    def delete_all_tasks(self):
+        """Deletes all tasks in given pool"""
+
+        jobs = [l for l in self.batch_client.job.list()]
+
+        def try_delete(jid):
+            try:
+                self.batch_client.job.delete(job_id=jid)
+            except Exception as e:
+                print("already gone")
+
+        jid_list = [job.as_dict()["id"] for job in jobs]
+        return [try_delete(j_id) for j_id in jid_list]
+
     def delete_pool(self):
 
         pool_name = self.config["POOL"]["POOL_ID"]
-        logging.info("Deleting pool: {0}".format(pool_name))
+        logger.info("Deleting pool: {0}".format(pool_name))
         self.batch_client.pool.delete(pool_name)
 
     def list_pools(self):
@@ -296,14 +308,14 @@ class AzureBatchContainers(object):
         for task in self.tasks:
 
             node_id = batch.task.get(self.job_id, task.id).node_info.node_id
-            logging.info("Task: {}".format(task.id))
-            logging.info("Node: {}".format(node_id))
+            logger.info("Task: {}".format(task.id))
+            logger.info("Node: {}".format(node_id))
 
             stream = batch.file.get_from_task(self.job_id, task.id, file_path)
 
             file_text = _read_stream_as_string(stream, encoding)
-            logging.info("Standard output:")
-            logging.info(file_text)
+            logger.info("Standard output:")
+            logger.info(file_text)
 
     def add_task(self, task_command: str, task_name: str, start_dir: str = None):
         """Add tasks to Azure Batch Job.
@@ -329,12 +341,20 @@ class AzureBatchContainers(object):
         else:
             extra_opts = f"--workdir /{start_dir}/"
 
+        if self.use_fileshare:
+            if self.config["POOL"]["PUBLISHER"] == "MicrosoftWindowsServer":
+                mount = f"S:\\:C:\\{start_dir}\\logs"
+            else:
+                mount = f"/azfileshare/:/{start_dir}/logs"
+            extra_opts += f" --volume {mount}"
+
         self.task_id = task_name
-        logging.debug(
+        logger.debug(
             "Submitting task {0} to pool {1} with command {2}".format(
                 task_name, self.pool_id, task_command
             )
         )
+        logger.debug(f"Extra configuration operations: {extra_opts}")
         task_container_settings = batch.models.TaskContainerSettings(
             image_name=self.image_name + ":" + self.image_version,
             container_run_options=extra_opts,
@@ -360,7 +380,7 @@ class AzureBatchContainers(object):
 
         timeout_expiration = datetime.datetime.now() + timeout
 
-        logging.info(
+        logger.info(
             "Monitoring all tasks for 'Completed' state, timeout in {}...".format(
                 timeout
             ),
@@ -403,7 +423,7 @@ class AzureBatchContainers(object):
         if not brain_name:
             brain_name = self.config["BONSAI"]["BRAIN_NAME"].strip("'")
 
-        logging.info(
+        logger.info(
             "Using batch account {0} to run job {1} with {2} tasks".format(
                 self.config["BATCH"]["ACCOUNT_NAME"],
                 self.config["POOL"]["JOB_NAME"],
@@ -412,7 +432,7 @@ class AzureBatchContainers(object):
         )
 
         for i in range(int(self.config["POOL"]["NUM_TASKS"])):
-            logging.debug(
+            logger.debug(
                 "Staggering {}s between task".format(
                     int(self.config["POOL"]["TIME_DELAY_BETWEEN_SIMS"])
                 )
@@ -431,11 +451,11 @@ class AzureBatchContainers(object):
         # Pause execution until tasks reach Completed state.
         if wait_for_tasks:
             self.wait_for_tasks_to_complete(datetime.timedelta(hours=2))
-            logging.info(
+            logger.info(
                 "Success! All tasks reached the 'Completed' state within the specified timeout period."
             )
         else:
-            logging.info(
+            logger.info(
                 "Submitted all tasks, use self.list_tasks to view currently running tasks."
             )
 
@@ -538,26 +558,23 @@ def run_tasks(
         vm_sku = input(
             "What VM Name / SKU do you want to use? (if you don't know say None): "
         )
-        if vm_sku.lower() == "none":
+        if vm_sku.lower() == "none" or vm_sku.lower() == "":
             if tasks_per_node <= 8:
-                config["POOL"]["VM_SIZE"] = "Standard_E2s_v3"
+                vm_sku = "Standard_E2s_v3"
             elif tasks_per_node <= 16:
-                config["POOL"]["VM_SIZE"] = "Standard_E8s_v3"
+                vm_sku = "Standard_E8s_v3"
             elif tasks_per_node <= 32:
-                config["POOL"]["VM_SIZE"] = "Standard_E16s_v3"
+                vm_sku = "Standard_E16s_v3"
             elif tasks_per_node <= 75:
-                config["POOL"]["VM_SIZE"] = "Standard_E32s_v3"
+                vm_sku = "Standard_E32s_v3"
             elif tasks_per_node > 75:
-                config["POOL"]["VM_SIZE"] = "Standard_E64s_v3"
-                logging.info(
+                vm_sku = "Standard_E64s_v3"
+                logger.info(
                     "Running {0} tasks per node, please check if VM Size is compatible".format(
                         tasks_per_node
                     )
                 )
-        else:
-            config["POOL"]["VM_SIZE"] = vm_sku
-    else:
-        config["POOL"]["VM_SIZE"] = vm_sku
+    config["POOL"]["VM_SIZE"] = vm_sku
 
     if not image_name:
         image_name = config["ACR"]["IMAGE_NAME"]
@@ -637,11 +654,30 @@ def upload_files(directory: str, config_file: str = user_config):
     xfer_utils.start_uploader(context, directory)
 
 
+def list_pool_nodes(config_file: str = user_config):
+
+    batch_pool = AzureBatchContainers(config_file=config_file)
+    pool_id = batch_pool.config["POOL"]["POOL_ID"].strip("'")
+
+    pc = batch_pool.batch_client.account.list_pool_node_counts(
+        account_list_pool_node_counts_options=batchmodels.AccountListPoolNodeCountsOptions(
+            filter="poolId eq '{}'".format(pool_id)
+        )
+    )
+    try:
+        nodes = list(pc)[0]
+        return nodes.as_dict()
+    except IndexError:
+        raise RuntimeError("pool {} does not exist".format(pool_id))
+
+
 if __name__ == "__main__":
 
     fire.Fire()
+    # nodes = list_pool_nodes(pool_name="PowerMount999")
     # run_tasks(image_name="winhouse")
     # batch_run = AzureBatchContainers(config_file=user_config)
+    # batch_run.delete_all_tasks(pool_id="dev2")
     # batch_run.batch_main()
 
     # next_task = 'python -c "import os; print(os.listdir()); print(os.getcwd())"'
@@ -649,3 +685,5 @@ if __name__ == "__main__":
     # batch_run.add_task(next_task, task_name='dir_check2')
     # another_task = r"""python3 -c 'import os; os.chdir("/bonsai"); print(os.listdir()); print(os.getcwd())'"""
     # batch_run.add_task(another_task, task_name='dir_change_again')
+
+    # run_tasks()
