@@ -189,15 +189,18 @@ and then re-run your tasks with a new** pool name `python batch_containers.py ru
 
 ### How to Delete an Existing Pool
 
-(1) Search for the Resource Group you selected when running `python batch_creation.py create_resources`
-
-(2) On Overview tab, click over the item name with type "Batch Account" (by default: "<your_group_name>batch")
-
-(3) On left pane, on 'Features' section, click over 'Pools'
-
-(4) You can now see a drop down with the list of previously created pools
-
 Note, deleting pools is the best way to completely ensure you don't run into additional costs once the brain training has completed.
+
+In order to delete from command line, you have the following options:
+- Delete last created pool: `python batch_containers.py delete_pool`.
+- Delete specific pool: `python batch_containers.py delete_pool --pool_name="pool-name"`.
+- Delete all pools within last created resource: `python batch_containers.py delete_pool --delete-all=True`.
+
+If you want to see and/or manage your current pools through Azure, you can follow the following steps:
+1. Search for the Resource Group you selected when running `python batch_creation.py create_resources`.
+2. On Overview tab, click over the item name with TYPE "Batch Account" (by default: "<your_group_name>batch").
+3. On left pane, on 'Features' section, click over 'Pools'.
+4. You can now see a drop down with the list of previously created pools.
 
 ### Building Windows Containers
 

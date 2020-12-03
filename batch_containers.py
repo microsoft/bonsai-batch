@@ -246,11 +246,6 @@ class AzureBatchContainers(object):
         # update pool id for jobs
         self.pool_id = pool_id
 
-    def delete_pool(self, pool_name):
-
-        logger.info("Deleting pool: {0}".format(pool_name))
-        self.batch_client.pool.delete(pool_name)
-
     def add_job(self, job_name: str = None):
         """Add a job to Azure Batch Pool in self.pool_id. Job is specified using config['POOL'] parameters. Job ID is retained to self.job_id attribute."""
 
@@ -288,9 +283,19 @@ class AzureBatchContainers(object):
         jid_list = [job.as_dict()["id"] for job in jobs]
         return [try_delete(j_id) for j_id in jid_list]
 
-    def delete_pool(self):
+    def delete_pool(self, pool_name=None, delete_all=False):
 
-        pool_name = self.config["POOL"]["POOL_ID"]
+        if delete_all:
+            # Iterate over each pool and delete it, then return
+            pool_iterator = self.batch_client.pool.list()
+            pool_names = map(lambda x: x.id, pool_iterator)
+            for pool_name in pool_names:
+                self.batch_client.pool.delete(pool_name)
+                logger.info("Deleting pool: {0}".format(pool_name))
+            return
+
+        if pool_name is None:
+            pool_name = self.config["POOL"]["POOL_ID"]
         logger.info("Deleting pool: {0}".format(pool_name))
         self.batch_client.pool.delete(pool_name)
 
@@ -630,12 +635,44 @@ def stop_job(config_file: str = user_config):
 
     batch_run = AzureBatchContainers(config_file=config_file)
     batch_run.delete_job()
+    
+
+def delete_pool(
+    pool_name: str = None,
+    delete_all: bool = False,
+    config_file: str = user_config
+    ):
+    """Kill pools for existing resource group in Azure Batch.
+
+    Parameters
+    ----------
+    pool_name : str, optional
+        Name of the pool to delete, by default None (will use last one set-up)
+    delete_all : bool, optional
+        Allows to delete all existing pools in current Resource Group
+    config_file : str, optional
+        Location of configuration file containing ACR and Batch parameters, by default user_config
+    """
+
+    batch_run = AzureBatchContainers(config_file=config_file)
+
+    if delete_all is True:
+        batch_run.delete_pool(delete_all=delete_all)
+        return
+
+    if pool_name is None:
+        batch_run.delete_pool()
+    else:
+        batch_run.delete_pool(pool_name=pool_name)
 
 
 def kill_pool(config_file: str = user_config):
 
-    batch_run = AzureBatchContainers(config_file=config_file)
-    batch_run.delete_pool()
+    logger.info("ATTENTION! 'kill_pool' command is soon to be deprecated. Please, start using 'delete_pool' command instead")
+    delete_pool()
+
+
+
 
 
 def upload_files(directory: str, config_file: str = user_config):
