@@ -171,7 +171,7 @@ The number of tasks per node will be automatically be deduced as number_of_sims/
 
 ### Note about modifying an existing pool
 
-In the current incarnation of this package, if you want to modify a pool by adding more nodes or changing files on the container, you have to recreate the pool, i.e.,
+In the current incarnation of this package, if you want to modify a pool by adding more nodes or changing files on the container, you have to recreate the pool with a new name. Reusing the same pool name, i.e.,
 
 ```
 python batch_containers.py run_tasks --pool_name="existing-pool"
@@ -183,7 +183,21 @@ will cause the tasks to re-use the old pool, even if you pass new values for low
 python batch_creation.py create_resources
 ```
 
-and then re-run your tasks `python batch_containers.py run_tasks`. Functionality will be added soon to modify an existing pool or changing some container files without rebuilding.
+and then re-run your tasks with a new** pool name `python batch_containers.py run_tasks --pool_name="new-pool-name"`. Functionality will be added soon to modify an existing pool or changing some container files without rebuilding.
+
+** Worth noting, deleting the previous pool manually directly on Azure, waiting patiently for it to dissapear on Pool list, and running command `python batch_containers.py run_tasks  --pool_name="existing-pool"` would also work (or `python batch_containers.py run_tasks` if using default naming convention). More about how to delete an existing pool right bellow:
+
+### How to Delete an Existing Pool
+
+(1) Search for the Resource Group you selected when running `python batch_creation.py create_resources`
+
+(2) On Overview tab, click over the item name with type "Batch Account" (by default: "<your_group_name>batch")
+
+(3) On left pane, on 'Features' section, click over 'Pools'
+
+(4) You can now see a drop down with the list of previously created pools
+
+Note, deleting pools is the best way to completely ensure you don't run into additional costs once the brain training has completed.
 
 ### Building Windows Containers
 
@@ -218,7 +232,7 @@ The first time you use this package you'll also need to login to azure and set y
 
 ```bash
 az login
-az account show -o table
+az account list -o table
 az account set -s <subscription-id>
 ```
 
