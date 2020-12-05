@@ -474,7 +474,8 @@ def build_image(
         docker_folder = input("Directory of Dockerfile and source files: ")
 
     if not image_name:
-        image_name = re.sub(r"[^\w\s]", "", docker_folder)
+        image_name = input("Please provide a name for your image: ")
+        # image_name = re.sub(r"[^\w\s]", "", docker_folder)
     if not image_version:
         image_version = "latest"
 

@@ -286,6 +286,7 @@ class AzureBatchContainers(object):
     def delete_pool(self, pool_name=None, delete_all=False):
 
         if delete_all:
+            logger.info("Deleting all pool!")
             # Iterate over each pool and delete it, then return
             pool_iterator = self.batch_client.pool.list()
             pool_names = map(lambda x: x.id, pool_iterator)
@@ -293,11 +294,29 @@ class AzureBatchContainers(object):
                 self.batch_client.pool.delete(pool_name)
                 logger.info("Deleting pool: {0}".format(pool_name))
             return
-
-        if pool_name is None:
-            pool_name = self.config["POOL"]["POOL_ID"]
-        logger.info("Deleting pool: {0}".format(pool_name))
+        else:
+            if pool_name is None:
+                pool_name = self.config["POOL"]["POOL_ID"]
+            logger.info("Deleting pool: {0}".format(pool_name))
         self.batch_client.pool.delete(pool_name)
+
+    def resize_pool(
+        self, pool_id: str = None, dedicated_nodes: int = 0, low_pri_nodes: int = 9
+    ):
+
+        if pool_id is None:
+            pool_id = self.config["POOL"]["POOL_ID"]
+        logger.info(
+            f"Resizing pool {pool_id} to {low_pri_nodes} low priority nodes and {dedicated_nodes} dedicated nodes"
+        )
+        pool_resize_param = batchmodels.PoolResizeParameter(
+            target_low_priority_nodes=low_pri_nodes,
+            target_dedicated_nodes=dedicated_nodes,
+        )
+
+        self.batch_client.pool.resize(
+            pool_id=pool_id, pool_resize_parameter=pool_resize_param
+        )
 
     def list_pools(self):
 
@@ -635,13 +654,11 @@ def stop_job(config_file: str = user_config):
 
     batch_run = AzureBatchContainers(config_file=config_file)
     batch_run.delete_job()
-    
+
 
 def delete_pool(
-    pool_name: str = None,
-    delete_all: bool = False,
-    config_file: str = user_config
-    ):
+    pool_name: str = None, delete_all: bool = False, config_file: str = user_config
+):
     """Kill pools for existing resource group in Azure Batch.
 
     Parameters
@@ -666,13 +683,25 @@ def delete_pool(
         batch_run.delete_pool(pool_name=pool_name)
 
 
-def kill_pool(config_file: str = user_config):
+def resize_pool(
+    pool_name: str = None, low_pri_nodes: int = None, dedicated_nodes: int = None
+):
+    """Resize pool
 
-    logger.info("ATTENTION! 'kill_pool' command is soon to be deprecated. Please, start using 'delete_pool' command instead")
-    delete_pool()
+    Parameters
+    ----------
+    pool_name : str, optional
+        [description], by default None
+    low_pri_nodes : int, optional
+        [description], by default None
+    dedicated_nodes : int, optional
+        [description], by default None
+    """
 
-
-
+    batch_run = AzureBatchContainers(config_file=user_config)
+    batch_run.resize_pool(
+        pool_name, low_pri_nodes=low_pri_nodes, dedicated_nodes=dedicated_nodes
+    )
 
 
 def upload_files(directory: str, config_file: str = user_config):
