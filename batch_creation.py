@@ -12,17 +12,25 @@ from typing import Dict, Union
 import fire
 from azure.cli.core import get_default_cli
 from error_handles import *
+from rich.logging import RichHandler
 
 import logging
 import logging.handlers
 
-# Add stdout handler, with level INFO
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-console_log = logging.StreamHandler()
-formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
-console_log.setFormatter(formater)
-logger.addHandler(console_log)
+FORMAT = "%(message)s"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(markup=True)],
+)
+
+loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+for logger in loggers:
+    logger.setLevel(logging.INFO)
+
+logger = logging.getLogger("batch_creation").setLevel(logging.INFO)
 
 default_config = os.path.join("configs", "config.ini")
 windows_config = os.path.join("configs", "winconfig.ini")
@@ -251,7 +259,7 @@ def delete_resources(rg_name: str):
         Name of the resource group to delete
     """
 
-    logging.warning("Deleting resource group {0}".format(rg_name))
+    logger.warning("Deleting resource group {0}".format(rg_name))
     azure_cli_run("group delete -n {0} -y --no-wait".format(rg_name))
 
 
@@ -281,7 +289,7 @@ def write_azure_config(
     if not pathlib.Path(config_file).exists():
         raise ValueError("No config file found at {0}".format(config_file))
     else:
-        logging.info("Using config from {}".format(config_file))
+        logger.info("Using config from {}".format(config_file))
         config.read(config_file)
 
         config["GROUP"]["NAME"] = rg
@@ -383,7 +391,7 @@ def create_resources(
         config = configparser.ConfigParser()
         config.read(new_conf_file)
         config["STORAGE"]["FILESHARE"] = "azfileshare"
-        logging.info(
+        logger.info(
             "Creating fileshare {0} for storage account {1}".format(
                 config["STORAGE"]["FILESHARE"], config["STORAGE"]["ACCOUNT_NAME"]
             )
@@ -427,7 +435,7 @@ def build_image(
     """
 
     if not os.path.exists(conf_file):
-        logging.warning(
+        logger.warning(
             f"No default configuration found at {conf_file}, creating config..."
         )
         rg = input("What is your provisioned workspace resource group? ")
