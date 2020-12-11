@@ -10,6 +10,7 @@ import os
 import pathlib
 import sys
 import time
+from math import ceil
 from typing import List
 from distutils.util import strtobool
 
@@ -21,6 +22,7 @@ import fire
 from azure.common.credentials import ServicePrincipalCredentials
 from dotenv import load_dotenv, set_key
 from batch_creation import user_config, windows_config
+from get_azure_data import *
 
 import xfer_utils
 
@@ -30,19 +32,12 @@ import logging.handlers
 if not pathlib.Path("logs").exists():
     pathlib.Path("logs").mkdir(exist_ok=True, parents=True)
 
-logging.getLogger().setLevel(logging.NOTSET)
-
-# Add stdout handler, with level INFO
-console = logging.StreamHandler(sys.stdout)
-console.setLevel(logging.INFO)
-formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
-console.setFormatter(formater)
-logging.getLogger().addHandler(console)
-
-# Add file rotating handler, with level DEBUG
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+console_log = logging.StreamHandler()
+formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
+console_log.setFormatter(formater)
+logger.addHandler(console_log)
 
 
 class AzureBatchContainers(object):
@@ -439,7 +434,7 @@ class AzureBatchContainers(object):
         log_iterations: bool = False,
         workdir: str = None,
     ):
-        """Hub to run Bonsai scale-sim job. This adds hub.py tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC'] and config.['BONSAI'] parameters."""
+        """Hub to run Bonsai scale-sim job. This adds the command as tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC']."""
 
         self.create_pool(use_fileshare=log_iterations)
         self.add_job()
@@ -471,6 +466,16 @@ class AzureBatchContainers(object):
                 ),
                 start_dir=workdir,
             )
+
+        vm_prices = show_hourly_price(
+            region=self.config["GROUP"]["LOCATION"],
+            machine_sku=self.config["POOL"]["VM_SIZE"],
+            low_pri_nodes=int(self.config["POOL"]["LOW_PRI_NODES"]),
+            dedicated_nodes=int(self.config["POOL"]["DEDICATED_NODES"]),
+            host_os=self.config["ACR"]["PLATFORM"],
+        )
+
+        logger.warning(f"Hourly cost of Batch Pool: ${vm_prices}")
 
         # Pause execution until tasks reach Completed state.
         if wait_for_tasks:
@@ -566,12 +571,12 @@ def run_tasks(
 
     if not task_to_run:
         task_to_run = input(
-            "Please enter task to run from container (e.g., python __main__.py): "
+            "Please enter task to run from container (e.g., python main.py): "
         )
     if not num_tasks:
         num_tasks = input("Number of simulators to run as tasks on Batch: ")
     total_nodes = low_pri_nodes + dedicated_nodes
-    tasks_per_node = max(int(int(num_tasks) / total_nodes), 1)
+    tasks_per_node = max(ceil(float(num_tasks) / total_nodes), 1)
 
     config["POOL"]["NUM_TASKS"] = str(num_tasks)
     config["POOL"]["TASKS_PER_NODE"] = str(tasks_per_node)
@@ -580,7 +585,7 @@ def run_tasks(
 
     if not vm_sku:
         vm_sku = input(
-            "What VM Name / SKU do you want to use? (if you don't know say None): "
+            "What VM Name / SKU do you want to use? (if you don't know leave this empty): "
         )
         if vm_sku.lower() == "none" or vm_sku.lower() == "":
             if tasks_per_node <= 8:
@@ -598,6 +603,19 @@ def run_tasks(
                         tasks_per_node
                     )
                 )
+            logger.warning(
+                f"Auto-selecting {vm_sku} for your pool based on calculated tasks per node."
+            )
+            if tasks_per_node > 8:
+                logger.warning(
+                    f"You have asked to run {tasks_per_node} tasks per node! You also did not provide a VM SKU. Based on this we selected {vm_sku} as your VM, which may be costly! Please confirm with yes in the next prompt or choose a different VM. Our calculator https://share.streamlit.io/akzaidi/bonsai-cost-calculator/main/st-azure-pricing.py may be helpful for your calculations."
+                )
+                confirm_sku = input(
+                    f"Confirm with yes if you want to use {vm_sku} for your pool, or type in a new VM SKU: "
+                )
+                if confirm_sku.lower() != "yes":
+                    vm_sku = confirm_sku
+
     config["POOL"]["VM_SIZE"] = vm_sku
 
     if not image_name:

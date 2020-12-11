@@ -16,16 +16,13 @@ from error_handles import *
 import logging
 import logging.handlers
 
-logging.getLogger().setLevel(logging.NOTSET)
-
 # Add stdout handler, with level INFO
-console = logging.StreamHandler(sys.stdout)
-console.setLevel(logging.INFO)
-formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
-console.setFormatter(formater)
-logging.getLogger().addHandler(console)
-
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+console_log = logging.StreamHandler()
+formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
+console_log.setFormatter(formater)
+logger.addHandler(console_log)
 
 default_config = os.path.join("configs", "config.ini")
 windows_config = os.path.join("configs", "winconfig.ini")
