@@ -460,7 +460,7 @@ class AzureBatchContainers(object):
         )
 
         logger.warning(
-            f"Hourly cost of Batch Pool: ${vm_prices}. Pausing for 10 seconds before submitting tasks. Press Ctrl-C to cancel job."
+            f":moneybag: Hourly cost of Batch Pool: ${vm_prices}. Pausing for 10 seconds before submitting tasks. Press Ctrl-C to cancel job."
         )
         time.sleep(10)
 
