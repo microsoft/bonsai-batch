@@ -10,8 +10,8 @@ dependencies:
   - pandas=0.25.1
   - numpy=1.16.4
   - pip:
-      - microsoft-bonsai-api==0.1.1
-      - bonsai-cli==1.0.0
+      - microsoft-bonsai-api==0.1.2
+      - bonsai-cli==1.0.4
       - azure-cli==2.5.1
       - azure-batch==9.0.0
       - cufflinks==0.16
