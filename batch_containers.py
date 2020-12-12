@@ -450,6 +450,18 @@ class AzureBatchContainers(object):
             )
         )
 
+        vm_prices = show_hourly_price(
+            region=self.config["GROUP"]["LOCATION"],
+            machine_sku=self.config["POOL"]["VM_SIZE"],
+            low_pri_nodes=int(self.config["POOL"]["LOW_PRI_NODES"]),
+            dedicated_nodes=int(self.config["POOL"]["DEDICATED_NODES"]),
+            host_os=self.config["ACR"]["PLATFORM"],
+        )
+
+        logger.warning(
+            f"Hourly cost of Batch Pool: ${vm_prices}. Pausing for 10 seconds before submitting tasks. Press Ctrl-C to cancel job."
+        )
+
         for i in range(int(self.config["POOL"]["NUM_TASKS"])):
             logger.debug(
                 "Staggering {}s between task".format(
@@ -466,16 +478,6 @@ class AzureBatchContainers(object):
                 ),
                 start_dir=workdir,
             )
-
-        vm_prices = show_hourly_price(
-            region=self.config["GROUP"]["LOCATION"],
-            machine_sku=self.config["POOL"]["VM_SIZE"],
-            low_pri_nodes=int(self.config["POOL"]["LOW_PRI_NODES"]),
-            dedicated_nodes=int(self.config["POOL"]["DEDICATED_NODES"]),
-            host_os=self.config["ACR"]["PLATFORM"],
-        )
-
-        logger.warning(f"Hourly cost of Batch Pool: ${vm_prices}")
 
         # Pause execution until tasks reach Completed state.
         if wait_for_tasks:
