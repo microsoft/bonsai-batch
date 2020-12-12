@@ -17,27 +17,22 @@ from distutils.util import strtobool
 import azure.batch._batch_service_client as batch
 import azure.batch.batch_auth as batch_auth
 import azure.batch.models as batchmodels
-import blobxfer.api
 import fire
 from azure.common.credentials import ServicePrincipalCredentials
 from dotenv import load_dotenv, set_key
 from batch_creation import user_config, windows_config
 from get_azure_data import *
 
-import xfer_utils
-
 import logging
 import logging.handlers
+from rich.logging import RichHandler
 
-if not pathlib.Path("logs").exists():
-    pathlib.Path("logs").mkdir(exist_ok=True, parents=True)
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(markup=True)]
+)
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-console_log = logging.StreamHandler()
-formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
-console_log.setFormatter(formater)
-logger.addHandler(console_log)
+logger = logging.getLogger("batch_containers")
 
 
 class AzureBatchContainers(object):
@@ -233,10 +228,16 @@ class AzureBatchContainers(object):
         )
 
         if not skip_if_exists or not self.batch_client.pool.exists(pool_id):
-            logger.warning("Creating new pool named {}".format(pool_id))
+            logger.warning(
+                "Creating new pool named [bold magenta]{}[/bold".format(pool_id)
+            )
             self.batch_client.pool.add(self.new_pool)
         else:
-            logger.warning("Pool exists, re-using {}".format(pool_id))
+            logger.warning(
+                "Pool exists, re-using pool named [bold magenta]{}[/bold magenta]".format(
+                    pool_id
+                ),
+            )
 
         # update pool id for jobs
         self.pool_id = pool_id
@@ -461,6 +462,7 @@ class AzureBatchContainers(object):
         logger.warning(
             f"Hourly cost of Batch Pool: ${vm_prices}. Pausing for 10 seconds before submitting tasks. Press Ctrl-C to cancel job."
         )
+        time.sleep(10)
 
         for i in range(int(self.config["POOL"]["NUM_TASKS"])):
             logger.debug(
@@ -584,6 +586,9 @@ def run_tasks(
     config["POOL"]["TASKS_PER_NODE"] = str(tasks_per_node)
     config["POOL"]["LOW_PRI_NODES"] = str(low_pri_nodes)
     config["POOL"]["DEDICATED_NODES"] = str(dedicated_nodes)
+    logger.info(
+        f"Requested pool size low-priority nodes: {low_pri_nodes}, dedicated nodes: {dedicated_nodes}"
+    )
 
     if not vm_sku:
         vm_sku = input(
@@ -606,11 +611,11 @@ def run_tasks(
                     )
                 )
             logger.warning(
-                f"Auto-selecting {vm_sku} for your pool based on calculated tasks per node."
+                f"Auto-selecting [bold green]{vm_sku}[/bold green] for your pool based on calculated tasks per node.",
             )
             if tasks_per_node > 8:
                 logger.warning(
-                    f"You have asked to run {tasks_per_node} tasks per node! You also did not provide a VM SKU. Based on this we selected {vm_sku} as your VM, which may be costly! Please confirm with yes in the next prompt or choose a different VM. Our calculator https://share.streamlit.io/akzaidi/bonsai-cost-calculator/main/st-azure-pricing.py may be helpful for your calculations."
+                    f"You have asked to run {tasks_per_node} tasks per node! You also did not provide a VM SKU. Based on this we selected {vm_sku} as your VM, which may be costly! Please confirm with [bold magenta]yes[/bold magenta] in the next prompt or choose a different VM. Our calculator https://share.streamlit.io/akzaidi/bonsai-cost-calculator/main/st-azure-pricing.py may be helpful for your calculations.",
                 )
                 confirm_sku = input(
                     f"Confirm with yes if you want to use {vm_sku} for your pool, or type in a new VM SKU: "
