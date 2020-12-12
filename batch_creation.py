@@ -6,26 +6,14 @@ import configparser
 import os
 import pathlib
 import re
-import sys
 from typing import Dict, Union
 
 import fire
 from azure.cli.core import get_default_cli
 from error_handles import *
 
-import logging
-import logging.handlers
+from rich import print
 
-logging.getLogger().setLevel(logging.NOTSET)
-
-# Add stdout handler, with level INFO
-console = logging.StreamHandler(sys.stdout)
-console.setLevel(logging.INFO)
-formater = logging.Formatter("%(name)-13s: %(levelname)-8s %(message)s")
-console.setFormatter(formater)
-logging.getLogger().addHandler(console)
-
-logger = logging.getLogger(__name__)
 
 default_config = os.path.join("configs", "config.ini")
 windows_config = os.path.join("configs", "winconfig.ini")
@@ -54,8 +42,8 @@ def azure_cli_run(cmd: str) -> Union[Dict, bool]:
         return cli.result.result
     elif cli.result.error:
         if any(msg in cli.result.error.message for msg in all_messages):
-            logger.error(
-                f"Creation failed due to known reason: {cli.result.error.message}"
+            print(
+                f"[bold red]Creation failed due to known reason: {cli.result.error.message}[/bold red]"
             )
         else:
             raise cli.result.error
@@ -228,6 +216,10 @@ class AcrBuild:
         self, extra_build_args: Union[str, None], filename: str = "Dockerfile"
     ):
 
+        print(
+            f"Building a [bold blue]{self.platform}[/bold blue] image [bold]{self.image_name}[/bold] in [bold green]{self.registry}.azurecr.io[/bold green]"
+        )
+
         if extra_build_args:
             buildargs = " --build-arg {0}".format(extra_build_args)
         else:
@@ -254,7 +246,7 @@ def delete_resources(rg_name: str):
         Name of the resource group to delete
     """
 
-    logging.warning("Deleting resource group {0}".format(rg_name))
+    print("Deleting resource group {0}".format(rg_name))
     azure_cli_run("group delete -n {0} -y --no-wait".format(rg_name))
 
 
@@ -284,7 +276,7 @@ def write_azure_config(
     if not pathlib.Path(config_file).exists():
         raise ValueError("No config file found at {0}".format(config_file))
     else:
-        logging.info("Using config from {}".format(config_file))
+        print("Using config from {}".format(config_file))
         config.read(config_file)
 
         config["GROUP"]["NAME"] = rg
@@ -386,7 +378,7 @@ def create_resources(
         config = configparser.ConfigParser()
         config.read(new_conf_file)
         config["STORAGE"]["FILESHARE"] = "azfileshare"
-        logging.info(
+        print(
             "Creating fileshare {0} for storage account {1}".format(
                 config["STORAGE"]["FILESHARE"], config["STORAGE"]["ACCOUNT_NAME"]
             )
@@ -430,9 +422,7 @@ def build_image(
     """
 
     if not os.path.exists(conf_file):
-        logging.warning(
-            f"No default configuration found at {conf_file}, creating config..."
-        )
+        print(f"No default configuration found at {conf_file}, creating config...")
         rg = input("What is your provisioned workspace resource group? ")
         acr = input("What is your provisioned workspace ACR path? ")
         acr = acr.replace(".azurecr.io", "")
