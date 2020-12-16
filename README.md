@@ -180,7 +180,7 @@ python batch_containers.py run_tasks --pool_name="existing-pool"
 will cause the tasks to re-use the old pool, even if you pass new values for low-pri-nodes or dedicated-nodes. Instead, rebuild the pool image by
 
 ```
-python batch_creation.py create_resources
+python batch_creation.py build_image --image-name <image-name>
 ```
 
 and then re-run your tasks with a new** pool name `python batch_containers.py run_tasks --pool_name="new-pool-name"`. Functionality will be added soon to modify an existing pool or changing some container files without rebuilding.
