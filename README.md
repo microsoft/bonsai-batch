@@ -169,24 +169,6 @@ The command will ask in the user to enter the number of sims to run, and the bra
 
 The number of tasks per node will be automatically be deduced as number_of_sims/(number_low_pri_nodes + number_dedicated_nodes)
 
-### Note about modifying an existing pool
-
-In the current incarnation of this package, if you want to modify a pool by adding more nodes or changing files on the container, you have to recreate the pool with a new name. Reusing the same pool name, i.e.,
-
-```
-python batch_containers.py run_tasks --pool_name="existing-pool"
-```
-
-will cause the tasks to re-use the old pool, even if you pass new values for low-pri-nodes or dedicated-nodes. Instead, rebuild the pool image by
-
-```
-python batch_creation.py build_image --image-name <image-name>
-```
-
-and then re-run your tasks with a new** pool name `python batch_containers.py run_tasks --pool_name="new-pool-name"`. Functionality will be added soon to modify an existing pool or changing some container files without rebuilding.
-
-** Worth noting, deleting the previous pool manually directly on Azure, waiting patiently for it to dissapear on Pool list, and running command `python batch_containers.py run_tasks  --pool_name="existing-pool"` would also work (or `python batch_containers.py run_tasks` if using default naming convention). More about how to delete an existing pool right bellow:
-
 ### How to Delete an Existing Pool
 
 Note, deleting pools is the best way to completely ensure you don't run into additional costs once the brain training has completed.
@@ -201,6 +183,21 @@ If you want to see and/or manage your current pools through Azure, you can follo
 2. On Overview tab, click over the item name with TYPE "Batch Account" (by default: "<your_group_name>batch").
 3. On left pane, on 'Features' section, click over 'Pools'.
 4. You can now see a drop down with the list of previously created pools.
+
+### Note About Modifying An Existing Pool
+
+If you want to resize an existing pool, use the function `resize_pool`
+
+```
+python batch_containers.py resize_pool --low_pri_nodes <new-low-pri-node-count> --dedicated_nodes <new-dedicated-node-count>
+```
+
+If you would like to modify the pool altogether, perhaps so that it uses a new image, then delete the pool first and run new tasks on the new pool:
+
+```
+python batch_containers.py delete_pool --pool_name <pool-to-delete>
+python batch_containers.py run_tasks
+```
 
 ### Building Windows Containers
 
