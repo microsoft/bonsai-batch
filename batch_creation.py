@@ -202,7 +202,7 @@ class AcrBuild:
         if platform:
             self.platform = platform
         else:
-            docker_file = open("/".join([docker_path, "Dockerfile"]))
+            docker_file = open(os.path.join(docker_path, "Dockerfile"))
             docker_lines = docker_file.readlines()
             if "windows" in docker_lines[0]:
                 self.platform = "windows"
@@ -217,24 +217,25 @@ class AcrBuild:
     ):
 
         print(
-            f"Building a [bold blue]{self.platform}[/bold blue] image [bold]{self.image_name}[/bold] in [bold green]{self.registry}.azurecr.io[/bold green]"
+            f"Building a [bold blue]{self.platform}[/bold blue] image [bold]{self.image_name}:{self.image_version}[/bold] in [bold green]{self.registry}.azurecr.io[/bold green]"
         )
 
         if extra_build_args:
             buildargs = " --build-arg {0}".format(extra_build_args)
         else:
             buildargs = ""
-        azure_cli_run(
-            "acr build --image {0}:{1} --registry {2} --file {3}/{4} {3} --platform {5} {6}".format(
-                self.image_name,
-                self.image_version,
-                self.registry,
-                self.docker_path,
-                filename,
-                self.platform,
-                buildargs,
-            )
+
+        build_cmd = "acr build --image {0}:{1} --registry {2} --file {3}/{4} {3} --platform {5} {6}".format(
+            self.image_name,
+            self.image_version,
+            self.registry,
+            self.docker_path,
+            filename,
+            self.platform,
+            buildargs,
         )
+
+        azure_cli_run(build_cmd)
 
 
 def delete_resources(rg_name: str):
