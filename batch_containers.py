@@ -229,7 +229,9 @@ class AzureBatchContainers(object):
 
         if not skip_if_exists or not self.batch_client.pool.exists(pool_id):
             logger.warning(
-                "Creating new pool named [bold magenta]{}[/bold".format(pool_id)
+                "Creating new pool named [bold magenta]{}[/bold magenta]".format(
+                    pool_id
+                )
             )
             self.batch_client.pool.add(self.new_pool)
         else:
