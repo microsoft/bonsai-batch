@@ -764,6 +764,12 @@ def list_pool_nodes(config_file: str = user_config):
         raise RuntimeError("pool {} does not exist".format(pool_id))
 
 
+def kill_tasks(config_file: str = user_config):
+
+    batch_pool = AzureBatchContainers(config_file=config_file)
+    batch_pool.delete_all_tasks()
+
+
 if __name__ == "__main__":
 
     fire.Fire()
