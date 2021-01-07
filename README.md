@@ -248,6 +248,20 @@ docker pull azhvacacr.azurecr.io/hvac:1.0
 docker run -it azhvacacr.azurecr.io/hvac:1.0 bash
 ```
 
+## Reasons Your Unmanaged Sims May Become Unregistered
+
+Simulators may unregister from the Bonsai platform for any of the following reasons:
+
+- Software update to Bonsai platform
+- WaitForState timeout
+- WaitForAction timeout
+
+When using managed simulators, the platform will automatically re-register and connect sims when they unregister. When using unmanaged simulators, such as with the `bonsai-batch` scripts, the user is responsible for registering the simulators again. To aid this effort, the [`reconnect.py`](./reconnect.py) with the following flags to repeatedly look for sims with an `Unset` purpose and connect those specific session-id's back with your brain.
+
+```bash
+python reconnect.py --simulator-name HouseEnergy --brain-name 20201116_he --brain-version 1 --concept-name SmartHouse --interval 1
+```
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
