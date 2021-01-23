@@ -179,6 +179,7 @@ class AcrBuild:
         registry: str,
         platform: str = None,
         docker_path: str = ".",
+        timeout: int = 7200,
         *args,
         **kwargs,
     ):
@@ -209,13 +210,16 @@ class AcrBuild:
             else:
                 self.platform = "linux"
         self.docker_path = docker_path
+        self.timeout = timeout
 
         return super().__init__(*args, **kwargs)
 
     def build_image_acr(
-        self, extra_build_args: Union[str, None], filename: str = "Dockerfile"
+        self, extra_build_args: Union[str, None], filename: str = "Dockerfile", timeout: int = 7200,
     ):
 
+        if timeout:
+            self.timeout = timeout
         print(
             f"Building a [bold blue]{self.platform}[/bold blue] image [bold]{self.image_name}:{self.image_version}[/bold] in [bold green]{self.registry}.azurecr.io[/bold green]"
         )
@@ -225,7 +229,7 @@ class AcrBuild:
         else:
             buildargs = ""
 
-        build_cmd = "acr build --image {0}:{1} --registry {2} --file {3}/{4} {3} --platform {5} {6}".format(
+        build_cmd = "acr build --image {0}:{1} --registry {2} --file {3}/{4} {3} --platform {5} {6} --timeout {7}".format(
             self.image_name,
             self.image_version,
             self.registry,
@@ -233,6 +237,7 @@ class AcrBuild:
             filename,
             self.platform,
             buildargs,
+            self.timeout
         )
 
         azure_cli_run(build_cmd)
@@ -407,6 +412,7 @@ def build_image(
     platform: str = None,
     extra_build_args: str = None,
     conf_file: str = user_config,
+    timeout: int = 7200,
 ):
     """Build ACR image from a source directory containing a dockerfile and src files.
 
@@ -475,10 +481,10 @@ def build_image(
         image_version=image_version,
         registry=acr,
         platform=platform,
-        docker_path=docker_folder,
+        docker_path=docker_folder
     )
     acr_build_image.build_image_acr(
-        filename=dockerfile_path, extra_build_args=extra_build_args
+        filename=dockerfile_path, extra_build_args=extra_build_args, timeout=timeout
     )
     platform = acr_build_image.platform
 

@@ -122,8 +122,8 @@ def show_hourly_price(
     ded_table = get_table(region=region, low_pri=False, host_os=host_os)
     ded_table = ded_table[ded_table["name"].str.lower() == machine_sku.lower()]
 
-    hourly_price = (float(low_table.iloc[:, 3]) * low_pri_nodes) + (
-        float(ded_table.iloc[:, 3]) * dedicated_nodes
+    hourly_price = (float(low_table.iloc[0, 3]) * low_pri_nodes) + (
+        float(ded_table.iloc[0, 3]) * dedicated_nodes
     )
 
     return round(hourly_price, 2)

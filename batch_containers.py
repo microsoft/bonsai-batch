@@ -11,7 +11,7 @@ import pathlib
 import sys
 import time
 from math import ceil
-from typing import List
+from typing import Union
 from distutils.util import strtobool
 
 import azure.batch._batch_service_client as batch
@@ -193,10 +193,14 @@ class AzureBatchContainers(object):
             container_registries=[self.registry],
         )
 
+        mount_options = "-o vers=3.0,dir_mode=0777,file_mode=0777,sec=ntlmssp"
+        extra_opts = "/persistent:Yes"
+        win_opts = "-Persist"
         if self.config["ACR"]["PLATFORM"] == "windows":
             self.mount_path = "S"
+            mount_options = win_opts
         else:
-            self.mount_path = "azfileshare"
+            self.mount_path = "azfiles"
 
         if use_fileshare:
             fileshare_mount = batchmodels.MountConfiguration(
@@ -205,7 +209,7 @@ class AzureBatchContainers(object):
                     azure_file_url=self.config["STORAGE"]["URL"],
                     account_key=self.config["STORAGE"]["ACCOUNT_KEY"],
                     relative_mount_path=self.mount_path,
-                    mount_options="/persistent:Yes",
+                    mount_options=mount_options,
                 )
             )
             logger.info(f"Using fileshare mount {fileshare_mount}")
@@ -436,6 +440,7 @@ class AzureBatchContainers(object):
         wait_for_tasks: bool = False,
         log_iterations: bool = False,
         workdir: str = None,
+        show_price: bool = True,
     ):
         """Hub to run Bonsai scale-sim job. This adds the command as tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC']."""
 
@@ -453,18 +458,19 @@ class AzureBatchContainers(object):
             )
         )
 
-        vm_prices = show_hourly_price(
-            region=self.config["GROUP"]["LOCATION"],
-            machine_sku=self.config["POOL"]["VM_SIZE"],
-            low_pri_nodes=int(self.config["POOL"]["LOW_PRI_NODES"]),
-            dedicated_nodes=int(self.config["POOL"]["DEDICATED_NODES"]),
-            host_os=self.config["ACR"]["PLATFORM"],
-        )
+        if show_price:
+            vm_prices = show_hourly_price(
+                region=self.config["GROUP"]["LOCATION"],
+                machine_sku=self.config["POOL"]["VM_SIZE"],
+                low_pri_nodes=int(self.config["POOL"]["LOW_PRI_NODES"]),
+                dedicated_nodes=int(self.config["POOL"]["DEDICATED_NODES"]),
+                host_os=self.config["ACR"]["PLATFORM"],
+            )
 
-        logger.warning(
-            f":moneybag: Hourly cost of Batch Pool: ${vm_prices}. Pausing for 10 seconds before submitting tasks. Press Ctrl-C to cancel job."
-        )
-        time.sleep(10)
+            logger.warning(
+                f":moneybag: Hourly cost of Batch Pool: ${vm_prices}. Pausing for 10 seconds before submitting tasks. Press Ctrl-C to cancel job."
+            )
+            time.sleep(10)
 
         for i in range(int(self.config["POOL"]["NUM_TASKS"])):
             logger.debug(
@@ -535,7 +541,7 @@ def run_tasks(
     task_to_run: str = None,
     workspace: str = None,
     access_key: str = None,
-    num_tasks: str = None,
+    num_tasks: int = None,
     low_pri_nodes: int = 9,
     dedicated_nodes: int = 1,
     pool_name: str = None,
@@ -543,10 +549,12 @@ def run_tasks(
     use_service_principal: bool = False,
     vm_sku: str = None,
     config_file: str = user_config,
-    log_iterations: bool = False,
+    log_iterations: Union[bool, str] = False,
     workdir: str = None,
     image_name: str = None,
     image_version: str = None,
+    platform: str = None,
+    show_price: bool = True,
 ):
     """Run simulators in Azure Batch.
 
@@ -583,6 +591,10 @@ def run_tasks(
         num_tasks = input("Number of simulators to run as tasks on Batch: ")
     total_nodes = low_pri_nodes + dedicated_nodes
     tasks_per_node = max(ceil(float(num_tasks) / total_nodes), 1)
+
+    if platform:
+        logger.info(f"Writing {platform} to {config_file}'s platform argument.")
+        config["ACR"]["PLATFORM"] = platform
 
     config["POOL"]["NUM_TASKS"] = str(num_tasks)
     config["POOL"]["TASKS_PER_NODE"] = str(tasks_per_node)
@@ -673,7 +685,10 @@ def run_tasks(
         log_iterations = bool(strtobool(log_iterations))
 
     batch_run.batch_main(
-        command=task_to_run, log_iterations=log_iterations, workdir=workdir,
+        command=task_to_run,
+        log_iterations=log_iterations,
+        workdir=workdir,
+        show_price=show_price,
     )
 
 
@@ -772,7 +787,7 @@ def kill_tasks(config_file: str = user_config):
 
 if __name__ == "__main__":
 
-    fire.Fire()
+    # fire.Fire()
     # nodes = list_pool_nodes(pool_name="PowerMount999")
     # run_tasks(image_name="winhouse")
     # batch_run = AzureBatchContainers(config_file=user_config)
@@ -785,4 +800,4 @@ if __name__ == "__main__":
     # another_task = r"""python3 -c 'import os; os.chdir("/bonsai"); print(os.listdir()); print(os.getcwd())'"""
     # batch_run.add_task(another_task, task_name='dir_change_again')
 
-    # run_tasks()
+    run_tasks(task_to_run="python main.py", num_tasks=10, vm_sku="standard_a2_v2")
