@@ -787,7 +787,7 @@ def kill_tasks(config_file: str = user_config):
 
 if __name__ == "__main__":
 
-    # fire.Fire()
+    fire.Fire()
     # nodes = list_pool_nodes(pool_name="PowerMount999")
     # run_tasks(image_name="winhouse")
     # batch_run = AzureBatchContainers(config_file=user_config)
@@ -800,4 +800,4 @@ if __name__ == "__main__":
     # another_task = r"""python3 -c 'import os; os.chdir("/bonsai"); print(os.listdir()); print(os.getcwd())'"""
     # batch_run.add_task(another_task, task_name='dir_change_again')
 
-    run_tasks(task_to_run="python main.py", num_tasks=10, vm_sku="standard_a2_v2")
+    # run_tasks(task_to_run="python main.py", num_tasks=10, vm_sku="standard_a2_v2")
