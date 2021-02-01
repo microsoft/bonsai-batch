@@ -13,7 +13,7 @@ dependencies:
       - beautifulsoup4==4.9.1
       - bitstring==3.1.7
       - blobxfer==1.9.2
-      - bonsai-cli==1.0.4
+      - bonsai-cli==1.0.5
       - cufflinks==0.16
       - fire==0.2.1
       - microsoft-bonsai-api==0.1.2
