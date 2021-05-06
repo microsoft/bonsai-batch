@@ -10,6 +10,16 @@ __version__ = "0.0.5"
 import subprocess, argparse, datetime, time
 import os
 import json
+import logging
+import logging.handlers
+from rich.logging import RichHandler
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(markup=True)]
+)
+
+logger = logging.getLogger("batch_containers")
 
 def parse_sim_status(to_reverse=False):
     """ Function to parse bonsai simulator unmanaged list
@@ -49,7 +59,9 @@ def connect_sim(simulator_name: str, brain_name: str, brain_version: str, concep
             try:
                 unset_sims = parse_sim_status(to_reverse)
             except:
-                print('ERROR from reconnect.py: No sims are available with your criteria from bonsai simulator list. Retrying {}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.'.format(retry_count))
+                logger.warning(
+                    f'ERROR from reconnect.py: No sims are available with your criteria from bonsai simulator list. Retrying {}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.'.format(retry_count)
+                )
                 continue
             for sessid in unset_sims:
                 if sessid not in blocked_list:
@@ -127,7 +139,7 @@ if __name__ == "__main__":
     parser.add_argument(
             "--interval",
             type=int,
-            default=None,
+            default=15,
             help="interval to periodically run reconnect in minutes",
         )
 
