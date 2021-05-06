@@ -59,9 +59,7 @@ def connect_sim(simulator_name: str, brain_name: str, brain_version: str, concep
             try:
                 unset_sims = parse_sim_status(to_reverse)
             except:
-                logger.warning(
-                    f'ERROR from reconnect.py: No sims are available with your criteria from bonsai simulator list. Retrying {}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.'.format(retry_count)
-                )
+                logger.warning(f'No sims are available with your criteria from bonsai simulator list. Retrying {retry_count}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.')
                 continue
             for sessid in unset_sims:
                 if sessid not in blocked_list:
@@ -75,21 +73,21 @@ def connect_sim(simulator_name: str, brain_name: str, brain_version: str, concep
                 else:
                     pass
         except subprocess.TimeoutExpired:
-            print('{}: command timeout, will retry in {} min, retry attempt {} out of {}'.format(datetime.datetime.now(),retry_wait/60, retry_count, max_retries))
+            logger.info(f'{datetime.datetime.now()}: command timeout, will retry in {retry_wait/60} min, retry attempt {retry_count} out of {max_retries}')
             time.sleep(retry_wait)
         except subprocess.SubprocessError:
             try: 
-                print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-                print("We may be going through a deployment and session id: {} has become invalidated, ignoring...".format(sessid))
+                logger.info(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+                logger.info(f"We may be going through a deployment and session id: {sessid} has become invalidated, ignoring...")
                 blocked_list.append(sessid)
-                print('blocked list: {}'.format(blocked_list))
-                print('{}: command error, will retry in {} min, retry attempt {} out of {}'.format(datetime.datetime.now(),retry_wait/60, retry_count, max_retries))
-                print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+                logger.info(f'blocked list: {blocked_list}')
+                logger.info(f'{datetime.datetime.now()}: command error, will retry in {retry_wait/60} min, retry attempt {retry_count} out of {max_retries}')
+                logger.info(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
                 time.sleep(retry_wait)
             except:
-                print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-                print('ERROR from reconnect.py: No sims are available with your criteria from bonsai simulator list. Retrying {}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.'.format(retry_count))
-                print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+                logger.info(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+                logger.info(f'ERROR from reconnect.py: No sims are available with your criteria from bonsai simulator list. Retrying {retry_count}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.')
+                logger.info(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
                 time.sleep(retry_wait)
         else: 
             break
@@ -164,5 +162,5 @@ if __name__ == "__main__":
             action=args.action,
             to_reverse=to_reverse,
         )
-        print('{}: reconnect will execute in {} min'.format(datetime.datetime.now(),args.interval))
+        logger.info(f'{datetime.datetime.now()}: reconnect will execute in {args.interval} min')
         time.sleep(args.interval*60)
