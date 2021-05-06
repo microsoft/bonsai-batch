@@ -3,6 +3,8 @@
 """
 
 import configparser
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import pathlib
 import re
@@ -13,7 +15,22 @@ from azure.cli.core import get_default_cli
 from error_handles import *
 
 from rich import print
+from rich.logging import RichHandler
 
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level=logging.INFO,
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(markup=True)],
+)
+
+for name in logging.Logger.manager.loggerDict.keys():
+    if "azure" in name:
+        logging.getLogger(name).setLevel(logging.WARNING)
+        logging.propagate = True
+
+logger = logging.getLogger("batch_creation")
 
 default_config = os.path.join("configs", "config.ini")
 windows_config = os.path.join("configs", "winconfig.ini")
@@ -38,11 +55,11 @@ def azure_cli_run(cmd: str) -> Union[Dict, bool]:
     cli = get_default_cli()
     cli.invoke(args)
     if cli.result.result:
-        print("az {0}...".format(cmd))
+        logger.info("az {0}...".format(cmd))
         return cli.result.result
     elif cli.result.error:
         if any(msg in cli.result.error.message for msg in all_messages):
-            print(
+            logger.info(
                 f"[bold red]Creation failed due to known reason: {cli.result.error.message}[/bold red]"
             )
         else:
@@ -215,12 +232,15 @@ class AcrBuild:
         return super().__init__(*args, **kwargs)
 
     def build_image_acr(
-        self, extra_build_args: Union[str, None], filename: str = "Dockerfile", timeout: int = 7200,
+        self,
+        extra_build_args: Union[str, None],
+        filename: str = "Dockerfile",
+        timeout: int = 7200,
     ):
 
         if timeout:
             self.timeout = timeout
-        print(
+        logger.info(
             f"Building a [bold blue]{self.platform}[/bold blue] image [bold]{self.image_name}:{self.image_version}[/bold] in [bold green]{self.registry}.azurecr.io[/bold green]"
         )
 
@@ -237,7 +257,7 @@ class AcrBuild:
             filename,
             self.platform,
             buildargs,
-            self.timeout
+            self.timeout,
         )
 
         azure_cli_run(build_cmd)
@@ -252,7 +272,7 @@ def delete_resources(rg_name: str):
         Name of the resource group to delete
     """
 
-    print("Deleting resource group {0}".format(rg_name))
+    logger.info("Deleting resource group {0}".format(rg_name))
     azure_cli_run("group delete -n {0} -y --no-wait".format(rg_name))
 
 
@@ -282,7 +302,7 @@ def write_azure_config(
     if not pathlib.Path(config_file).exists():
         raise ValueError("No config file found at {0}".format(config_file))
     else:
-        print("Using config from {}".format(config_file))
+        logger.info("Using config from {}".format(config_file))
         config.read(config_file)
 
         config["GROUP"]["NAME"] = rg
@@ -384,7 +404,7 @@ def create_resources(
         config = configparser.ConfigParser()
         config.read(new_conf_file)
         config["STORAGE"]["FILESHARE"] = "azfileshare"
-        print(
+        logger.info(
             "Creating fileshare {0} for storage account {1}".format(
                 config["STORAGE"]["FILESHARE"], config["STORAGE"]["ACCOUNT_NAME"]
             )
@@ -429,7 +449,9 @@ def build_image(
     """
 
     if not os.path.exists(conf_file):
-        print(f"No default configuration found at {conf_file}, creating config...")
+        logger.info(
+            f"No default configuration found at {conf_file}, creating config..."
+        )
         rg = input("What is your provisioned workspace resource group? ")
         acr = input("What is your provisioned workspace ACR path? ")
         acr = acr.replace(".azurecr.io", "")
@@ -481,7 +503,7 @@ def build_image(
         image_version=image_version,
         registry=acr,
         platform=platform,
-        docker_path=docker_folder
+        docker_path=docker_folder,
     )
     acr_build_image.build_image_acr(
         filename=dockerfile_path, extra_build_args=extra_build_args, timeout=timeout
