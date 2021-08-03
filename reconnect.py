@@ -86,7 +86,7 @@ def connect_sim(simulator_name: str, brain_name: str, brain_version: str, concep
                 time.sleep(retry_wait)
             except:
                 logger.info(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-                logger.info(f'ERROR from reconnect.py: No sims are available with your criteria from bonsai simulator list. Retrying {retry_count}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.')
+                logger.info(f'No sims are available with your criteria from bonsai simulator list. Retrying {retry_count}... Perhaps spin up new sims, check network issues, or increase command timeout in reconnect.py if issue persists.')
                 logger.info(f'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
                 time.sleep(retry_wait)
         else: 
