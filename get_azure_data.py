@@ -45,17 +45,21 @@ def get_table(
     azure_price_url = "https://azureprice.net/" + "?region=" + region
 
     if low_pri:
-        azure_price_url += "&priority=true"
+        azure_price_url += "&priority=low"
     else:
-        azure_price_url += "&priority=false"
+        azure_price_url += "&priority=standard"
+
+    print(azure_price_url)
 
     html = urlopen(azure_price_url)
     soup = BeautifulSoup(html, "html.parser")
-    body_script = soup.find("body").script
+    # body_script = soup.find("body").script
+    body_script = soup.find_all("script")[17]
     body_script_contents = body_script.contents
 
     table_str = str(body_script_contents)
-    b = table_str[17:-11]
+    # extract data
+    b = table_str[15:-7]
 
     if host_os == "linux":
         drop_os = "windows"
