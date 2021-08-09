@@ -796,12 +796,13 @@ def run_bakeoff(
     config_file: str = user_config,
     num_instances: int = 20,
     brain_name: str = "bakeoff-cartpole",
-    brain_version: int = 1,
+    brain_version: int = 2,
     sim_name: str = "Cartpole",
     concept_name: str = "BalancePole",
     low_pri_nodes: int = 10,
     dedicated_nodes: int = 0,
-    sleep_time: int = 10,
+    sleep_time: int = 5,
+    pool_name: str = "bakeoff-test",
 ):
 
     logger.info(f"Starting batch pool with {num_instances} instances")
@@ -812,6 +813,7 @@ def run_bakeoff(
         num_tasks=num_instances,
         vm_sku="none",
         config_file=config_file,
+        pool_name=pool_name,
     )
 
     # check brain is in train mode
@@ -826,7 +828,7 @@ def run_bakeoff(
         train_cmd = f"bonsai brain version start-training -n {brain_name} --version {brain_version} -c {concept_name} -o json"
         subprocess.check_output(train_cmd.split(" "))
 
-    logger.info(f"Sleeping for{sleep_time} minutes before connecting simulators")
+    logger.info(f"Sleeping for {sleep_time} minutes before connecting simulators")
     time.sleep(sleep_time * 60)
 
     logger.info(f"Connecting simulators {sim_name} to {brain_name}:{brain_version}")
@@ -844,7 +846,7 @@ def run_bakeoff(
 
     if brain_status == "Idle":
         logger.info(f"Brain has stopped training, deleting pool")
-        delete_pool()
+        delete_pool(pool_name=pool_name)
 
 
 if __name__ == "__main__":
