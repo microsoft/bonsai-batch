@@ -6,9 +6,11 @@
 
 import configparser
 import datetime
+from distutils.command.config import config
 import os
 import pathlib
 import sys
+import subprocess
 import time
 from math import ceil
 from typing import Union
@@ -288,7 +290,7 @@ class AzureBatchContainers(object):
     def delete_pool(self, pool_name=None, delete_all=False):
 
         if delete_all:
-            logger.info("Deleting all pool!")
+            logger.warn("Deleting all pools!")
             # Iterate over each pool and delete it, then return
             pool_iterator = self.batch_client.pool.list()
             pool_names = map(lambda x: x.id, pool_iterator)
@@ -608,34 +610,34 @@ def run_tasks(
         vm_sku = input(
             "What VM Name / SKU do you want to use? (if you don't know leave this empty): "
         )
-        if vm_sku.lower() == "none" or vm_sku.lower() == "":
-            if tasks_per_node <= 8:
-                vm_sku = "Standard_E2s_v3"
-            elif tasks_per_node <= 16:
-                vm_sku = "Standard_E8s_v3"
-            elif tasks_per_node <= 32:
-                vm_sku = "Standard_E16s_v3"
-            elif tasks_per_node <= 75:
-                vm_sku = "Standard_E32s_v3"
-            elif tasks_per_node > 75:
-                vm_sku = "Standard_E64s_v3"
-                logger.info(
-                    "Running {0} tasks per node, please check if VM Size is compatible".format(
-                        tasks_per_node
-                    )
+    if vm_sku.lower() == "none" or vm_sku.lower() == "":
+        if tasks_per_node <= 8:
+            vm_sku = "Standard_E2s_v3"
+        elif tasks_per_node <= 16:
+            vm_sku = "Standard_E8s_v3"
+        elif tasks_per_node <= 32:
+            vm_sku = "Standard_E16s_v3"
+        elif tasks_per_node <= 75:
+            vm_sku = "Standard_E32s_v3"
+        elif tasks_per_node > 75:
+            vm_sku = "Standard_E64s_v3"
+            logger.info(
+                "Running {0} tasks per node, please check if VM Size is compatible".format(
+                    tasks_per_node
                 )
-            logger.warning(
-                f"Auto-selecting [bold green]{vm_sku}[/bold green] for your pool based on calculated tasks per node.",
             )
-            if tasks_per_node > 8:
-                logger.warning(
-                    f"You have asked to run {tasks_per_node} tasks per node! You also did not provide a VM SKU. Based on this we selected {vm_sku} as your VM, which may be costly! Please confirm with [bold magenta]yes[/bold magenta] in the next prompt or choose a different VM. Our calculator https://share.streamlit.io/akzaidi/bonsai-cost-calculator/main/st-azure-pricing.py may be helpful for your calculations.",
-                )
-                confirm_sku = input(
-                    f"Confirm with yes if you want to use {vm_sku} for your pool, or type in a new VM SKU: "
-                )
-                if confirm_sku.lower() != "yes":
-                    vm_sku = confirm_sku
+        logger.warning(
+            f"Auto-selecting [bold green]{vm_sku}[/bold green] for your pool based on calculated tasks per node.",
+        )
+        if tasks_per_node > 8:
+            logger.warning(
+                f"You have asked to run {tasks_per_node} tasks per node! You also did not provide a VM SKU. Based on this we selected {vm_sku} as your VM, which may be costly! Please confirm with [bold magenta]yes[/bold magenta] in the next prompt or choose a different VM. Our calculator https://share.streamlit.io/akzaidi/bonsai-cost-calculator/main/st-azure-pricing.py may be helpful for your calculations.",
+            )
+            confirm_sku = input(
+                f"Confirm with yes if you want to use {vm_sku} for your pool, or type in a new VM SKU: "
+            )
+            if confirm_sku.lower() != "yes":
+                vm_sku = confirm_sku
 
     config["POOL"]["VM_SIZE"] = vm_sku
 
@@ -785,6 +787,66 @@ def kill_tasks(config_file: str = user_config):
     batch_pool.delete_all_tasks()
 
 
+def pool_statistics(config_file: str = user_config):
+
+    batch_pool = AzureBatchContainers(config_file=config_file)
+
+
+def run_bakeoff(
+    config_file: str = user_config,
+    num_instances: int = 20,
+    brain_name: str = "bakeoff-cartpole",
+    brain_version: int = 1,
+    sim_name: str = "Cartpole",
+    concept_name: str = "BalancePole",
+    low_pri_nodes: int = 10,
+    dedicated_nodes: int = 0,
+    sleep_time: int = 10,
+):
+
+    logger.info(f"Starting batch pool with {num_instances} instances")
+    run_tasks(
+        task_to_run="python main.py",
+        low_pri_nodes=low_pri_nodes,
+        dedicated_nodes=dedicated_nodes,
+        num_tasks=num_instances,
+        vm_sku="none",
+        config_file=config_file,
+    )
+
+    # check brain is in train mode
+    logger.info(f"Checking brain is in train mode")
+    brain_cmd = (
+        f"bonsai brain version show -n {brain_name} --version {brain_version} -o json"
+    )
+    brain_results = json.loads(subprocess.check_output(brain_cmd.split(" ")))
+    brain_status = brain_results["trainingState"]
+    if brain_status == "Idle":
+        logger.info("Brain is not training yet. Starting training...")
+        train_cmd = f"bonsai brain version start-training -n {brain_name} --version {brain_version} -c {concept_name} -o json"
+        subprocess.check_output(train_cmd.split(" "))
+
+    logger.info(f"Sleeping for{sleep_time} minutes before connecting simulators")
+    time.sleep(sleep_time * 60)
+
+    logger.info(f"Connecting simulators {sim_name} to {brain_name}:{brain_version}")
+    connect_cmd = f"bonsai simulator unmanaged connect -b {brain_name} --brain-version {brain_version} -a Train -c {concept_name} --simulator-name {sim_name} --debug"
+    logger.info(connect_cmd)
+    run_it = subprocess.check_output(connect_cmd.split(" "))
+    logger.info(run_it)
+
+    brain_status = "Active"
+    while brain_status == "Active":
+        logger.info(f"Checking brain status")
+        brain_results = json.loads(subprocess.check_output(brain_cmd.split(" ")))
+        brain_status = brain_results["trainingState"]
+        time.sleep(60)
+
+    if brain_status == "Idle":
+        logger.info(f"Brain has stopped training, deleting pool")
+        delete_pool()
+
+
 if __name__ == "__main__":
 
     fire.Fire()
@@ -801,3 +863,6 @@ if __name__ == "__main__":
     # batch_run.add_task(another_task, task_name='dir_change_again')
 
     # run_tasks(task_to_run="python main.py", num_tasks=10, vm_sku="standard_a2_v2")
+
+    # pool_statistics()
+    # run_bakeoff()

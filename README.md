@@ -155,6 +155,19 @@ While there are a lot of different functions exposed, the most common usage only
 3. `python batch_containers.py run_tasks`
     - run your batch pool
 
+### Already Built Resources, Just Write them to the Config File 📝
+
+If you already have a resource-group and a Batch account, you can use the `write_azure_config` function to write out the credentials to a config file:
+
+```bash
+python batch_creation.py write_azure_config \
+	--rg=my-beautiful-rg \
+	--batch=has-a-batch-account \
+	--acr=and-acr-registyr \
+	--store=plus-storage! \
+	--loc=in-this-location
+```
+
 ## Comments on Usage
 
 The main advantage of this repository is it streamlines the process of scaling simulators using Azure Container Registry with Docker images. The only thing the user needs to do is write a Dockerfile containing their source code for running the simulator. In most cases, this is a very simple Docker image, and hence the Dockerfile is very concise. Building and running the image is done entirely using Azure Container Registry, which means you don't even need to install Docker locally!
