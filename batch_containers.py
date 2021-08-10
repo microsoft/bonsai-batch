@@ -227,7 +227,7 @@ class AzureBatchContainers(object):
                 node_agent_sku_id=node_agent_sku,
             ),
             vm_size=pool_vm_size,
-            max_tasks_per_node=num_tasks_per_node,
+            # max_tasks_per_node=num_tasks_per_node,
             target_dedicated_nodes=pool_dedicated_node_count,
             target_low_priority_nodes=pool_low_priority_node_count,
             mount_configuration=fileshare_mount,
@@ -862,13 +862,14 @@ def run_sims_connect(
 
     brain_status = "Active"
     while brain_status == "Active":
-        logger.info(f"Checking brain status")
+        logger.info(f"Checking brain status every minute...")
         brain_results = json.loads(subprocess.check_output(brain_cmd.split(" ")))
         brain_status = brain_results["trainingState"]
+        logger.info(f"Brain status: {brain_results['trainingState']}")
         time.sleep(60)
 
     if brain_status == "Idle":
-        logger.info(f"Brain has stopped training, deleting pool")
+        logger.warn(f"Brain has stopped training, deleting pool")
         delete_pool(pool_name=pool_name)
 
 
