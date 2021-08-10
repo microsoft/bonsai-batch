@@ -49,8 +49,6 @@ def get_table(
     else:
         azure_price_url += "&priority=standard"
 
-    print(azure_price_url)
-
     html = urlopen(azure_price_url)
     soup = BeautifulSoup(html, "html.parser")
     # body_script = soup.find("body").script

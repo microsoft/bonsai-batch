@@ -443,6 +443,7 @@ class AzureBatchContainers(object):
         log_iterations: bool = False,
         workdir: str = None,
         show_price: bool = True,
+        wait_time: int = 10,
     ):
         """Hub to run Bonsai scale-sim job. This adds the command as tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC']."""
 
@@ -470,9 +471,9 @@ class AzureBatchContainers(object):
             )
 
             logger.warning(
-                f":moneybag: Hourly cost of Batch Pool: ${vm_prices}. Pausing for 10 seconds before submitting tasks. Press Ctrl-C to cancel job."
+                f":moneybag: Hourly cost of Batch Pool: ${vm_prices}. Pausing for {wait_time} seconds before submitting tasks. Press Ctrl-C to cancel job."
             )
-            time.sleep(10)
+            time.sleep(wait_time)
 
         for i in range(int(self.config["POOL"]["NUM_TASKS"])):
             logger.debug(
@@ -557,6 +558,7 @@ def run_tasks(
     image_version: str = None,
     platform: str = None,
     show_price: bool = True,
+    wait_time: int = 10,
 ):
     """Run simulators in Azure Batch.
 
@@ -691,6 +693,7 @@ def run_tasks(
         log_iterations=log_iterations,
         workdir=workdir,
         show_price=show_price,
+        wait_time=wait_time,
     )
 
 
@@ -792,7 +795,7 @@ def pool_statistics(config_file: str = user_config):
     batch_pool = AzureBatchContainers(config_file=config_file)
 
 
-def run_bakeoff(
+def run_sims_connect(
     config_file: str = user_config,
     num_instances: int = 20,
     brain_name: str = "bakeoff-cartpole",
@@ -803,6 +806,7 @@ def run_bakeoff(
     dedicated_nodes: int = 0,
     sleep_time: int = 5,
     pool_name: str = "bakeoff-test",
+    ink_file: str = "cartpole.ink",
 ):
 
     logger.info(f"Starting batch pool with {num_instances} instances")
@@ -814,7 +818,16 @@ def run_bakeoff(
         vm_sku="none",
         config_file=config_file,
         pool_name=pool_name,
+        wait_time=0,
     )
+
+    # check for brain existence
+    brain_list_cmd = f"bonsai brain list -o json"
+    brain_list = json.loads(subprocess.check_output(brain_list_cmd.split()))
+    if brain_name not in brain_list["value"]:
+        logger.warn(f"No brain named {brain_name} found, creating...")
+        brain_create = f"bonsai brain create -n {brain_name}"
+        subprocess.call(brain_create.split(" "))
 
     # check brain is in train mode
     logger.info(f"Checking brain is in train mode")
@@ -825,6 +838,16 @@ def run_bakeoff(
     brain_status = brain_results["trainingState"]
     if brain_status == "Idle":
         logger.info("Brain is not training yet. Starting training...")
+        if os.path.exists(ink_file):
+            logger.info(
+                f"Pushing inkling to brain name {brain_name} and brain-version {brain_version}"
+            )
+            push_ink = f"bonsai brain version update-inkling -f {ink_file} -n {brain_name} --version {brain_version}"
+            subprocess.check_output(push_ink.split(" "))
+        else:
+            raise ValueError(
+                f"Brain not started and no inkling found at {ink_file}, cannot start training brain"
+            )
         train_cmd = f"bonsai brain version start-training -n {brain_name} --version {brain_version} -c {concept_name} -o json"
         subprocess.check_output(train_cmd.split(" "))
 
