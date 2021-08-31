@@ -19,6 +19,7 @@ from distutils.util import strtobool
 import azure.batch._batch_service_client as batch
 import azure.batch.batch_auth as batch_auth
 import azure.batch.models as batchmodels
+import pandas as pd
 import fire
 from azure.common.credentials import ServicePrincipalCredentials
 from dotenv import load_dotenv, set_key
@@ -729,6 +730,8 @@ def delete_pool(
     else:
         batch_run.delete_pool(pool_name=pool_name)
 
+    return False
+
 
 def resize_pool(
     pool_name: str = None, low_pri_nodes: int = None, dedicated_nodes: int = None
@@ -797,6 +800,8 @@ def pool_statistics(config_file: str = user_config):
 
 def run_sims_connect(
     config_file: str = user_config,
+    task_to_run: str = "python3 main.py",
+    scale_platform: str = "batch",
     num_instances: int = 20,
     brain_name: str = "bakeoff-cartpole",
     brain_version: int = 2,
@@ -807,33 +812,42 @@ def run_sims_connect(
     sleep_time: int = 5,
     pool_name: str = "bakeoff-test",
     ink_file: str = "cartpole.ink",
+    wait: bool = False,
+    connect_sims_brain: bool = True,
+    notes: Union[str, None] = None,
 ):
 
-    logger.info(f"Starting batch pool with {num_instances} instances")
-    run_tasks(
-        task_to_run="python main.py",
-        low_pri_nodes=low_pri_nodes,
-        dedicated_nodes=dedicated_nodes,
-        num_tasks=num_instances,
-        vm_sku="none",
-        config_file=config_file,
-        pool_name=pool_name,
-        wait_time=0,
-    )
-
-    # check for brain existence
-    brain_list_cmd = f"bonsai brain list -o json"
-    brain_list = json.loads(subprocess.check_output(brain_list_cmd.split()))
-    if brain_name not in brain_list["value"]:
-        logger.warn(f"No brain named {brain_name} found, creating...")
-        brain_create = f"bonsai brain create -n {brain_name}"
-        subprocess.call(brain_create.split(" "))
+    # check if brain exists
+    brain_list_cmd = "bonsai brain list -o json"
+    brain_list = json.loads(subprocess.check_output(brain_list_cmd.split(" ")))["value"]
+    if brain_name not in brain_list:
+        logger.warn(f"No brain {brain_name} found, creating...")
+        create_brain = f"bonsai brain create -n {brain_name} --description {notes}"
+        logger.debug(create_brain)
+        subprocess.check_output(create_brain.split(" "))
+    else:
+        # check if brain-version exists
+        brain_list_cmd = f"bonsai brain version list -n {brain_name} -o json"
+        logger.debug(brain_list_cmd)
+        brain_list = json.loads(subprocess.check_output(brain_list_cmd.split()))
+        brain_df = pd.DataFrame(brain_list["value"])
+        if int(brain_version) not in brain_df["version"].values:
+            logger.warn(
+                f"No brain: {brain_name} with version: {brain_version} found, creating..."
+            )
+            last_version = int(brain_version) - 1
+            brain_create_cmd = f"bonsai brain version copy -n {brain_name} --version {last_version} --notes {notes}"
+            logger.debug(brain_create_cmd)
+            subprocess.call(brain_create_cmd.split(" "))
+            # sleep for a bit before checking status
+            time.sleep(30)
 
     # check brain is in train mode
     logger.info(f"Checking brain is in train mode")
     brain_cmd = (
         f"bonsai brain version show -n {brain_name} --version {brain_version} -o json"
     )
+    logger.debug(brain_cmd)
     brain_results = json.loads(subprocess.check_output(brain_cmd.split(" ")))
     brain_status = brain_results["trainingState"]
     if brain_status == "Idle":
@@ -843,33 +857,94 @@ def run_sims_connect(
                 f"Pushing inkling to brain name {brain_name} and brain-version {brain_version}"
             )
             push_ink = f"bonsai brain version update-inkling -f {ink_file} -n {brain_name} --version {brain_version}"
+            logger.debug(push_ink)
             subprocess.check_output(push_ink.split(" "))
         else:
             raise ValueError(
                 f"Brain not started and no inkling found at {ink_file}, cannot start training brain"
             )
+
+    if scale_platform.lower() == "batch":
+        # first put brain in train mode
         train_cmd = f"bonsai brain version start-training -n {brain_name} --version {brain_version} -c {concept_name} -o json"
+        logger.debug(train_cmd)
         subprocess.check_output(train_cmd.split(" "))
 
-    logger.info(f"Sleeping for {sleep_time} minutes before connecting simulators")
-    time.sleep(sleep_time * 60)
+        # start simulators
+        # these will be connected if connect_sims_brain == True
+        logger.info(f"Starting batch pool with {num_instances} instances")
+        run_tasks(
+            # task_to_run="python3 main.py --sim-speed 90 --sim-speed-variance 30",
+            task_to_run=task_to_run,
+            low_pri_nodes=low_pri_nodes,
+            dedicated_nodes=dedicated_nodes,
+            num_tasks=num_instances,
+            vm_sku="none",
+            config_file=config_file,
+            pool_name=pool_name,
+            wait_time=0,
+        )
+
+        if sleep_time > 0:
+            logger.info(
+                f"Sleeping for {sleep_time} minutes before connecting simulators to brain"
+            )
+            time.sleep(sleep_time * 60)
+
+        if connect_sims_brain:
+            connect_sims(sim_name, brain_name, str(brain_version), concept_name)
+
+        brain_status = "waiting for sims"
+        while brain_status == "Active" and wait:
+            brain_status = get_brain_status(brain_name, str(brain_version), 60)
+
+        if brain_status == "Idle":
+            logger.info(f"Brain has stopped training, deleting pool")
+            delete_pool(pool_name=pool_name)
+
+        if not wait:
+            logger.warn(
+                f":warning: Brain is not being monitored, pool will NOT auto-delete"
+            )
+    elif scale_platform.lower() == "aci":
+        logger.info(f"Running simulators using managed simulator package {sim_name}")
+        # TODO: include logging as a parameter
+        aci_train_start = f"bonsai brain version start-training -n {brain_name} --version {brain_version} --simulator-package-name {sim_name} -c {concept_name} -i {num_instances}"
+        logger.debug(aci_train_start)
+        aci_start = subprocess.check_output(aci_train_start.split(" "))
+        brain_status = "Active"
+    else:
+        raise ValueError(f"Unknown scale platform {scale_platform}")
+
+    return brain_status
+
+
+def get_brain_status(brain_name: str, brain_version: str, sleep_time):
+
+    brain_cmd = (
+        f"bonsai brain version show -n {brain_name} --version {brain_version} -o json"
+    )
+    logger.debug(brain_cmd)
+    logger.info(
+        f"Checking brain status for brain {brain_name} and version {brain_version}"
+    )
+    brain_results = json.loads(subprocess.check_output(brain_cmd.split(" ")))
+    brain_status = brain_results["trainingState"]
+    logger.info(
+        f"Brain {brain_name} with version {brain_version} status: {brain_status}"
+    )
+    return brain_status
+
+
+def connect_sims(
+    sim_name: str, brain_name: str, brain_version: str, concept_name: str,
+):
 
     logger.info(f"Connecting simulators {sim_name} to {brain_name}:{brain_version}")
     connect_cmd = f"bonsai simulator unmanaged connect -b {brain_name} --brain-version {brain_version} -a Train -c {concept_name} --simulator-name {sim_name} --debug"
-    logger.info(connect_cmd)
+    logger.debug(connect_cmd)
     run_it = subprocess.check_output(connect_cmd.split(" "))
     logger.info(run_it)
-
-    brain_status = "Active"
-    while brain_status == "Active":
-        logger.info(f"Checking brain status")
-        brain_results = json.loads(subprocess.check_output(brain_cmd.split(" ")))
-        brain_status = brain_results["trainingState"]
-        time.sleep(60)
-
-    if brain_status == "Idle":
-        logger.info(f"Brain has stopped training, deleting pool")
-        delete_pool(pool_name=pool_name)
 
 
 if __name__ == "__main__":
