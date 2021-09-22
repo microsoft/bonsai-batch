@@ -27,9 +27,9 @@ def get_table(
     azure_price_url = "https://azureprice.net/" + "?region=" + region
 
     if low_pri:
-        azure_price_url += "&priority=low"
+        azure_price_url += "&tier=low"
     else:
-        azure_price_url += "&priority=standard"
+        azure_price_url += "&tier=standard"
 
     print(azure_price_url)
 
