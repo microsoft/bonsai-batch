@@ -31,7 +31,7 @@ def get_table(
     else:
         azure_price_url += "&tier=standard"
 
-    print(azure_price_url)
+    # print(azure_price_url)
 
     # html = urlopen(azure_price_url)
     hdr = {"User-Agent": "Mozilla/5.0"}
