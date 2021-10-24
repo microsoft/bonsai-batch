@@ -98,6 +98,8 @@ class AzCreateBatch:
         acr : str
             Name of Azure Container Registry to create.
         """
+        print("ACR",acr)
+        print("RG", self.rg)
 
         azure_cli_run("acr create -n {0} -g  {1} --sku Standard".format(acr, self.rg))
         azure_cli_run("acr update -n {0} --admin-enabled true".format(acr))
@@ -382,6 +384,9 @@ def create_resources(
             raise ValueError(
                 "Resources may contain only lowercase alphanumeric characters"
             )
+    if not rg.isalnum():
+        rg = re.sub('[\W_]+','',rg)
+
     if not acr and not always_ask:
         acr = rg + "acr"
     elif always_ask:
