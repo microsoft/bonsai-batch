@@ -385,10 +385,10 @@ def create_resources(
             )
         elif str_check(rg) and auto_convert:
             pre_conversion_rg = rg
-            logger.warn(
-                f"Provided resource group {rg} contains special characters; auto-converting to lowercase alphanumeric containers {pre_conversion_rg}"
-            )
             rg = re.sub("[\W_]+", "", pre_conversion_rg.lower())
+            logger.warn(
+                f"Provided resource group {pre_conversion_rg} contains special characters; auto-converting to lowercase alphanumeric containers {rg}"
+            )
 
     if not acr and not always_ask:
         acr = rg + "acr"
