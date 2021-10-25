@@ -1,25 +1,7 @@
-import json
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import pandas as pd
 from bs4 import BeautifulSoup
-
-columns_to_show = [
-    "name",
-    "numberOfCores",
-    # "osDiskSizeInMB",
-    # "resourceDiskSizeInMB",
-    # "maxDataDiskCount",
-    "memoryInMB",
-    "linuxPrice",
-    "windowsPrice",
-    "regionId",
-    "pricePerMemoryLinux",
-    "pricePerMemoryWindows",
-    "pricePerCoreLinux",
-    "pricePerCoreWindows",
-    "bestPriceRegion",
-]
 
 
 def get_table(
@@ -45,19 +27,36 @@ def get_table(
     azure_price_url = "https://azureprice.net/" + "?region=" + region
 
     if low_pri:
-        azure_price_url += "&priority=low"
+        azure_price_url += "&tier=low"
     else:
-        azure_price_url += "&priority=standard"
+        azure_price_url += "&tier=standard"
 
-    html = urlopen(azure_price_url)
+    # print(azure_price_url)
+
+    # html = urlopen(azure_price_url)
+    hdr = {"User-Agent": "Mozilla/5.0"}
+    req = Request(azure_price_url, headers=hdr)
+    html = urlopen(req)
+
     soup = BeautifulSoup(html, "html.parser")
-    # body_script = soup.find("body").script
-    body_script = soup.find_all("script")[17]
-    body_script_contents = body_script.contents
+    table = soup.find("table")
+    headings = [th.get_text().strip() for th in table.find("tr").find_all("th")]
+    table_body = soup.find("tbody")
+    data_list = []
 
-    table_str = str(body_script_contents)
-    # extract data
-    b = table_str[15:-7]
+    rows = table_body.find_all("tr")
+    for row in rows:
+        data_list.append([x.get_text() for x in row.find_all("td")])
+    data_df = pd.DataFrame(data_list, columns=headings)
+    table_df = data_df.drop(columns=data_df.columns.to_list()[-2])
+
+    # body_script = soup.find("body").script
+    # body_script = soup.find_all("script")[17]
+    # body_script_contents = body_script.contents
+
+    # table_str = str(body_script_contents)
+    # # extract data
+    # b = table_str[15:-7]
 
     if host_os == "linux":
         drop_os = "windows"
@@ -65,9 +64,12 @@ def get_table(
         drop_os = "linux"
     regex_os = "(?i)" + drop_os
 
-    table_df = pd.DataFrame(json.loads(b))
-    table_df = table_df[columns_to_show]
+    # table_df = pd.DataFrame(json.loads(b))
+    # table_df = table_df[columns_to_show]
     table_df = table_df[table_df.columns.drop(list(table_df.filter(regex=regex_os)))]
+    table_df[["vCPUs", "Memory (GiB)"]] = table_df[["vCPUs", "Memory (GiB)"]].apply(
+        pd.to_numeric
+    )
     return table_df
 
 
@@ -120,9 +122,9 @@ def show_hourly_price(
 ):
 
     low_table = get_table(region=region, low_pri=True, host_os=host_os)
-    low_table = low_table[low_table["name"].str.lower() == machine_sku.lower()]
+    low_table = low_table[low_table["VM Name"].str.lower() == machine_sku.lower()]
     ded_table = get_table(region=region, low_pri=False, host_os=host_os)
-    ded_table = ded_table[ded_table["name"].str.lower() == machine_sku.lower()]
+    ded_table = ded_table[ded_table["VM Name"].str.lower() == machine_sku.lower()]
 
     hourly_price = (float(low_table.iloc[0, 3]) * low_pri_nodes) + (
         float(ded_table.iloc[0, 3]) * dedicated_nodes
@@ -133,4 +135,5 @@ def show_hourly_price(
 
 if __name__ == "__main__":
 
-    print(get_table("westus").head())
+    # print(get_table("westus").head())
+    show_hourly_price()
