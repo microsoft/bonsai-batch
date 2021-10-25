@@ -259,6 +259,7 @@ class AcrBuild:
             buildargs,
             self.timeout,
         )
+        logger.info(build_cmd)
 
         azure_cli_run(build_cmd)
 
@@ -329,9 +330,8 @@ def write_azure_config(
 def str_check(input_str: str) -> bool:
 
     reject = False
-    regex = re.compile("[@_!#$%^&*()<>?/\|}{~:]")
 
-    if regex.search(input_str):
+    if not input_str.isalnum():
         reject = True
     if any(x.isupper() for x in input_str):
         reject = True
@@ -351,6 +351,7 @@ def create_resources(
     new_conf_file: str = user_config,
     create_fileshare: bool = True,
     always_ask: bool = False,
+    auto_convert: bool = True,
 ):
     """Main function to create azure resources and write out credentials to config file
 
@@ -378,12 +379,16 @@ def create_resources(
         rg = input(
             "specify resource group (at least 3, no more than 25, and only lowercase alphanumeric characters): "
         )
-        if str_check(rg):
+        if str_check(rg) and not auto_convert:
             raise ValueError(
                 "Resources may contain only lowercase alphanumeric characters"
             )
-    if not rg.isalnum():
-        rg = re.sub('[\W_]+','',rg)
+        elif str_check(rg) and auto_convert:
+            pre_conversion_rg = rg
+            logger.warn(
+                f"Provided resource group {rg} contains special characters; auto-converting to lowercase alphanumeric containers {pre_conversion_rg}"
+            )
+            rg = re.sub("[\W_]+", "", pre_conversion_rg.lower())
 
     if not acr and not always_ask:
         acr = rg + "acr"
