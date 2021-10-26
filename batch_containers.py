@@ -229,6 +229,7 @@ class AzureBatchContainers(object):
             ),
             vm_size=pool_vm_size,
             # max_tasks_per_node=num_tasks_per_node,
+            task_slots_per_node=num_tasks_per_node,
             target_dedicated_nodes=pool_dedicated_node_count,
             target_low_priority_nodes=pool_low_priority_node_count,
             mount_configuration=fileshare_mount,
@@ -565,10 +566,14 @@ def run_tasks(
 
     Parameters
     ----------
+    task_to_run : str, optional
+        [description], by default None
+    workspace : str, optional
+        [description], by default None
+    access_key : str, optional
+        [description], by default None
     num_tasks : str, mandatory
         Number of simulators to run as separate tasks
-    brain_name: str, mandatory
-        Name of the brain to train
     low_pri_nodes : int, optional
         Number of low priority to create in pool, by default 9
     dedicated_nodes : int, optional
@@ -577,9 +582,27 @@ def run_tasks(
         Name of the pool to create for simulation scaling, by default None
     job_name : str, optional
         Job name for simulation scaling job, by default None
+    use_service_principal : bool, optional
+        [description], by default False
+    vm_sku : str, optional
+        [description], by default None
     config_file : str, optional
         Location of configuration file containing ACR and Batch parameters, by default user_config
-    """
+    log_iterations : Union[bool, str], optional
+        [description], by default False
+    workdir : str, optional
+        [description], by default None
+    image_name : str, optional
+        [description], by default None
+    image_version : str, optional
+        [description], by default None
+    platform : str, optional
+        [description], by default None
+    show_price : bool, optional
+        [description], by default True
+    wait_time : int, optional
+        [description], by default 10
+    """    
 
     if not os.path.exists(config_file):
         raise ValueError(f"No configuration file found at {config_file}")

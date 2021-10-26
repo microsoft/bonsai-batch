@@ -172,15 +172,17 @@ python batch_creation.py write_azure_config \
 
 The main advantage of this repository is it streamlines the process of scaling simulators using Azure Container Registry with Docker images. The only thing the user needs to do is write a Dockerfile containing their source code for running the simulator. In most cases, this is a very simple Docker image, and hence the Dockerfile is very concise. Building and running the image is done entirely using Azure Container Registry, which means you don't even need to install Docker locally!
 
-## Scaling number of sims, number of tasks and number of instances in a pool
+## Scaling Number Of Sims, Number Of Tasks And Number Of Instances In A Pool
 
-In order to specify the number of nodes in the pool, define the following arguments:
+To specify the number of nodes in the pool, define the following arguments:
+
 ```
 python batch_containers.py run_tasks --dedicated-nodes=<#_of_dedicated nodes> --low-pri-nodes=<#_of_lo_pri_nodes>
 ```
-The command will ask in the user to enter the number of sims to run, and the brain name.
 
-The number of tasks per node will be automatically be deduced as number_of_sims/(number_low_pri_nodes + number_dedicated_nodes)
+The number of tasks per node will be automatically deduced as number_of_sims/(number_low_pri_nodes + number_dedicated_nodes). You can view this parameter by inspecting your pool's configuration and the value of `Task slots per node`:
+
+![](imgs/task_slots.png)
 
 ### How to Delete an Existing Pool
 
