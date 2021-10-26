@@ -175,12 +175,16 @@ The main advantage of this repository is it streamlines the process of scaling s
 ## Scaling number of sims, number of tasks and number of instances in a pool
 
 In order to specify the number of nodes in the pool, define the following arguments:
+
 ```
 python batch_containers.py run_tasks --dedicated-nodes=<#_of_dedicated nodes> --low-pri-nodes=<#_of_lo_pri_nodes>
 ```
+
 The command will ask in the user to enter the number of sims to run, and the brain name.
 
-The number of tasks per node will be automatically be deduced as number_of_sims/(number_low_pri_nodes + number_dedicated_nodes)
+The number of tasks per node will be automatically be deduced as number_of_sims/(number_low_pri_nodes + number_dedicated_nodes). You can view this parameter by inspecting your pool's configuration and the value of `Task slots per node`:
+
+
 
 ### How to Delete an Existing Pool
 
