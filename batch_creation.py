@@ -84,11 +84,14 @@ class AzCreateBatch:
 
         return super().__init__(*args, **kwargs)
 
-    def create_rg(self):
+    def create_rg(self, rg_loc: Union[str, None]):
         """Create resource group based on with self.rg.
         All subsequent resourecs will be under this resource group.
         """
-        azure_cli_run("group create -l {0} -n {1}".format(self.loc, self.rg))
+
+        if not rg_loc:
+            rg_loc = self.loc
+        azure_cli_run("group create -l {0} -n {1}".format(rg_loc, self.rg))
 
     def create_acr(self, acr: str):
         """Create an Azure Container Registry. Skips if already exists under resource group.
@@ -99,7 +102,7 @@ class AzCreateBatch:
             Name of Azure Container Registry to create.
         """
 
-        azure_cli_run("acr create -n {0} -g  {1} --sku Standard".format(acr, self.rg))
+        azure_cli_run("acr create -n {0} -g {1} -l {2} --sku Standard".format(acr, self.rg, self.loc))
         azure_cli_run("acr update -n {0} --admin-enabled true".format(acr))
 
     def create_batch(self, batch: str):
@@ -283,6 +286,7 @@ def write_azure_config(
     store: Union[str, None],
     batch: str,
     loc: str,
+    rg_loc: str,
     config_file: str = default_config,
     new_config_file: str = user_config,
 ):
@@ -307,16 +311,20 @@ def write_azure_config(
         config.read(config_file)
 
         config["GROUP"]["NAME"] = rg
-        config["GROUP"]["LOCATION"] = loc
+        config["GROUP"]["LOCATION"] = rg_loc
+
+        config["BATCH"]["LOCATION"] = loc
         config["BATCH"]["ACCOUNT_KEY"] = batch_key
         config["BATCH"]["ACCOUNT_NAME"] = batch
         config["BATCH"]["ACCOUNT_URL"] = (
             "https://" + batch + "." + loc + ".batch.azure.com"
         )
 
+        config["STORAGE"]["LOCATION"] = loc
         config["STORAGE"]["ACCOUNT_NAME"] = store
         config["STORAGE"]["ACCOUNT_KEY"] = store_key
 
+        config["ACR"]["LOCATION"] = loc
         config["ACR"]["SERVER"] = acr + ".azurecr.io"
         config["ACR"]["USERNAME"] = acr
         config["ACR"]["PASSWORD"] = acr_pw
@@ -347,6 +355,7 @@ def create_resources(
     store: str = None,
     batch: str = None,
     loc: str = "westus",
+    rg_loc: Union[str, None] = None,
     conf_file: str = default_config,
     new_conf_file: str = user_config,
     create_fileshare: bool = True,
@@ -400,13 +409,17 @@ def create_resources(
         batch = rg + "batch"
 
     az_create = AzCreateBatch(rg, loc=loc)
-    az_create.create_rg()
+    az_create.create_rg(rg_loc=rg_loc)
     az_create.create_acr(acr)
     az_create.create_batch(batch)
     az_create.create_store(store)
     az_create.connect_store_batch(batch_account=batch, storage_account=store)
 
-    write_azure_config(rg, acr, store, batch, loc, conf_file, new_conf_file)
+    # if rg_loc is not provided make it the same as loc since we need to write it
+    if not rg_loc:
+        rg_loc = loc
+
+    write_azure_config(rg, acr, store, batch, loc, rg_loc, conf_file, new_conf_file)
 
     if create_fileshare:
         config = configparser.ConfigParser()
