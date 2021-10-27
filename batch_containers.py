@@ -446,6 +446,7 @@ class AzureBatchContainers(object):
         workdir: str = None,
         show_price: bool = True,
         wait_time: int = 10,
+        delay_next: int = 0,
     ):
         """Hub to run Bonsai scale-sim job. This adds the command as tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC']."""
 
@@ -478,11 +479,11 @@ class AzureBatchContainers(object):
             time.sleep(wait_time)
 
         for i in range(int(self.config["POOL"]["NUM_TASKS"])):
-            logger.debug(
-                "Staggering {}s between task".format(
-                    int(self.config["POOL"]["TIME_DELAY_BETWEEN_SIMS"])
+            if delay_next > 0:
+                logger.debug(
+                    "Staggering {} seconds between task".format(int(delay_next))
                 )
-            )
+                time.sleep(int(delay_next))
 
             if not command:
                 command = "python main.py"
@@ -561,6 +562,7 @@ def run_tasks(
     platform: str = None,
     show_price: bool = True,
     wait_time: int = 10,
+    time_delay: int = 0,
 ):
     """Run simulators in Azure Batch.
 
@@ -602,7 +604,9 @@ def run_tasks(
         [description], by default True
     wait_time : int, optional
         [description], by default 10
-    """    
+    time_delay: int, optional
+        time to delay next task, by default 0
+    """
 
     if not os.path.exists(config_file):
         raise ValueError(f"No configuration file found at {config_file}")
@@ -718,6 +722,7 @@ def run_tasks(
         workdir=workdir,
         show_price=show_price,
         wait_time=wait_time,
+        delay_next=time_delay
     )
 
 
@@ -960,7 +965,10 @@ def get_brain_status(brain_name: str, brain_version: str, sleep_time):
 
 
 def connect_sims(
-    sim_name: str, brain_name: str, brain_version: str, concept_name: str,
+    sim_name: str,
+    brain_name: str,
+    brain_version: str,
+    concept_name: str,
 ):
 
     logger.info(f"Connecting simulators {sim_name} to {brain_name}:{brain_version}")
