@@ -232,6 +232,35 @@ After building, you can run your tasks with the specific image you've created:
 python batch_containers.py run_tasks --image_name=winhouse
 ```
 
+### Mounting and Accessing Azure Fileshares
+
+You can also mount an Azure Fileshare and access it from your container. This can be useful if you want to write logs to a persistent storage facility or need to access files located on an external storage system when running your containers.
+
+If you want ot use Azure Fileshare, you need to ensure that `create_fileshare=True` during resource creation, i.e.,
+
+```bash
+python batch_creation.py create_resources --create_fileshare=True
+```
+
+Second, when running your containers you need to set `log_iterations=True`, i.e.,
+
+```bash
+python batch_containers.py run_tasks --log_iterations=True
+```
+
+This ensures your batch pool mounts the Azure Fileshare during pool creation. The fileshare will be mounted to the path `azfiles` under your mount directory. You can access the fileshare by utilizing the environment variable `$AZ_BATCH_NODE_MOUNTS_DIR`/`azfiles` (mount directory + path) (see [here] for more information on how directories are structured in your batch pools). For example, you may choose to log iterations using the following command:
+
+```bash
+> python batch_containers.py run_tasks --log_iterations=True
+Please enter task to run from container (e.g., python main.py): python main.py --log-iterations --log-path="$AZ_BATCH_NODE_MOUNTS_DIR""azfiles"/"cartpole-logs"
+```
+
+This will log the iterations to the directory `cartpole-logs` in your Azure Fileshare.
+
+For linux, the value of `$AZ_BATCH_NODE_MOUNTS_DIR` is typically `/mnt/batch/tasks/fsmounts/`, so you can also manually specify the entire path rather than using the environment variable (for instance if you cannot pass the environment variable during your command).
+
+⚠️ If you are logging from each of your containers you should try and ensure the filename is unique for each container to avoid clashes between logs from different containers.
+
 ### Installation
 
 There is currently no updated `batch_orchestration` package. The best way to use this package is to install the bonsai-batch conda environment (Follow this [link](https://docs.conda.io/en/latest/miniconda.html) if you need to install conda):
