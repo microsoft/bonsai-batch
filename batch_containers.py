@@ -150,7 +150,7 @@ class AzureBatchContainers(object):
         """
 
         batch_account_name = (self.config["BATCH"]["ACCOUNT_NAME"].strip("'"),)
-        location = self.config["GROUP"]["LOCATION"].strip("'")
+        location = self.config["BATCH"]["LOCATION"].strip("'")
 
         if service_principal:
             RESOURCE = "https://batch.core.windows.net/"
@@ -465,7 +465,7 @@ class AzureBatchContainers(object):
 
         if show_price:
             vm_prices = show_hourly_price(
-                region=self.config["GROUP"]["LOCATION"],
+                region=self.config["BATCH"]["LOCATION"],
                 machine_sku=self.config["POOL"]["VM_SIZE"],
                 low_pri_nodes=int(self.config["POOL"]["LOW_PRI_NODES"]),
                 dedicated_nodes=int(self.config["POOL"]["DEDICATED_NODES"]),

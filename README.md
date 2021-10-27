@@ -2,7 +2,7 @@
 
 ## Overview
 
-You've found the `batch-orchestration` framework. Here you'll find a set of tools to assist you in scaling out simulators using Azure Batch.
+You've found the `bonsai-batch` framework. Here you'll find a set of tools to assist you in scaling out simulators using Azure Batch. Note, while this was developed with Bonsai in mind, it's a general framework for running tasks on Azure Batch using its Python SDK.
 
 ⚠️ **Disclaimer**: This is not an official Microsoft product. This application is considered an experimental addition to Microsoft Project Bonsai's software toolchain. It's primary goal is to reduce barriers of entry to use Project Bonsai's core Machine Teaching, and no warranties are provided for its use.
 
@@ -15,7 +15,7 @@ You've found the `batch-orchestration` framework. Here you'll find a set of tool
 
 ```shell
 conda env create -f environment.yml
-conda activate bonsai-preview
+conda activate bonsai-batch
 ```
 
 ## Quick Start
@@ -149,15 +149,16 @@ COMMANDS
 While there are a lot of different functions exposed, the most common usage only relies on two of them from `batch_creation`, and one from `batch_containers`:
 
 1. `python batch_creation.py create_resources`
-    - create the resources
+    - create the resources you need for orchestrating tasks on Azure Batch. If you already have some resources created (e.g., a resource group) you can pass their names directly: `python batch_creation.py create_resources --rg=<existing-rg> --loc=<location-of-resources>` (⚠️: if your resource group exists in different location from your other resources you'll need to pass a location parameter for it separately: `python batch_creation.py create_resources --rg=<existing-rg> --rg_loc=<rg_location> --loc=<all-other-resources-loc>`).
 2. `python batch_creation.py build_image --image-name <image-name>`
     - build your Docker image on Azure Container Registry
+    - ⚠️ : if your image is very large you may need to increase the `--timeout` parameter to avoid the script from timing out when buidling the image. If you still encounter issues while creating and pushing the image you may prefer building the image locally and pushing using `docker push`, > `docker tag`, and `docker push`.
 3. `python batch_containers.py run_tasks`
     - run your batch pool
 
 ### Already Built Resources, Just Write them to the Config File 📝
 
-If you already have a resource-group and a Batch account, you can use the `write_azure_config` function to write out the credentials to a config file:
+If you already have a resource-group, ACR repository, storage, and a Batch account, you can use the `write_azure_config` function to write out the credentials to a config file rather than creating new resources:
 
 ```bash
 python batch_creation.py write_azure_config \
