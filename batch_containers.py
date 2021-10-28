@@ -13,7 +13,7 @@ import sys
 import subprocess
 import time
 from math import ceil
-from typing import Union
+from typing import Union, List
 from distutils.util import strtobool
 
 import azure.batch._batch_service_client as batch
@@ -439,7 +439,7 @@ class AzureBatchContainers(object):
 
     def batch_main(
         self,
-        command: str = None,
+        command: Union[str, List[str]] = None,
         brain_name: str = None,
         wait_for_tasks: bool = False,
         log_iterations: bool = False,
@@ -486,9 +486,15 @@ class AzureBatchContainers(object):
                 time.sleep(int(delay_next))
 
             if not command:
-                command = "python main.py"
+                run_command = "python main.py"
+            elif type(command) == list:
+                run_command = command[i]
+            elif type(command) == str:
+                run_command = command
+            else:
+                raise ValueError(f"Unknown command provided {command}")
             self.add_task(
-                task_command=command,
+                task_command=run_command,
                 task_name="job_number{0}_{1}".format(
                     i, self.config["POOL"]["JOB_NAME"].strip("'")
                 ),
@@ -544,7 +550,7 @@ def load_bonsai_env(env_file: str = ".env"):
 
 
 def run_tasks(
-    task_to_run: str = None,
+    task_to_run: Union[str, List[str]] = None,
     workspace: str = None,
     access_key: str = None,
     num_tasks: int = None,
@@ -568,8 +574,10 @@ def run_tasks(
 
     Parameters
     ----------
-    task_to_run : str, optional
-        [description], by default None
+    task_to_run : Union[str, List[str]], optional
+        Task(s) to run, by default None, which forces user to enter (a single task)
+        If you want to run distinct tasks provide a List of tasks to run.
+        In the case whena list is provided, note that len(task_to_run) must equal num_tasks.
     workspace : str, optional
         [description], by default None
     access_key : str, optional
@@ -621,6 +629,12 @@ def run_tasks(
         )
     if not num_tasks:
         num_tasks = input("Number of simulators to run as tasks on Batch: ")
+
+    if type(task_to_run) == List:
+        assert len(task_to_run) == int(
+            num_tasks
+        ), "Number of tasks must equal number of tasks to run"
+
     total_nodes = low_pri_nodes + dedicated_nodes
     tasks_per_node = max(ceil(float(num_tasks) / total_nodes), 1)
 
@@ -722,7 +736,7 @@ def run_tasks(
         workdir=workdir,
         show_price=show_price,
         wait_time=wait_time,
-        delay_next=time_delay
+        delay_next=time_delay,
     )
 
 
