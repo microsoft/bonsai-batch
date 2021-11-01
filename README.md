@@ -248,11 +248,19 @@ Second, when running your containers you need to set `log_iterations=True`, i.e.
 python batch_containers.py run_tasks --log_iterations=True
 ```
 
-This ensures your batch pool mounts the Azure Fileshare during pool creation. The fileshare will be mounted to the path `azfiles` under your mount directory. You can access the fileshare by utilizing the environment variable `$AZ_BATCH_NODE_MOUNTS_DIR"/azfiles"` (mount directory + path) (see [here] for more information on how directories are structured in your batch pools). For example, you may choose to log iterations using the following command:
+This ensures your batch pool mounts the Azure Fileshare during pool creation. The fileshare will be mounted to the path `azfiles` under your mount directory. You can access the fileshare by utilizing the environment variable `$AZ_BATCH_NODE_MOUNTS_DIR"/azfiles"` (mount directory + path) (see [here] for more information on how directories are structured in your batch pools).
+
+In order to ensure your batch pools correctly invoke the environment variable when running their tasks you may want to write add shell script to your container which you can then call by `batch_containers.run_tasks`. For instance, add a file called `batch-start-script.sh` with the following contents:
+
+```bash
+#!/usr/bin/env bash
+python main.py --log-iterations --log-path=$AZ_BATCH_NODE_MOUNTS_DIR/"azfiles/cartpole-logs"
+
+```
 
 ```bash
 > python batch_containers.py run_tasks --log_iterations=True
-Please enter task to run from container (e.g., python main.py): python main.py --log-iterations --log-path $AZ_BATCH_NODE_MOUNTS_DIR"azfiles/cartpole-logs"
+Please enter task to run from container (e.g., python main.py): bash batch-start-script.sh
 ```
 
 This will log the iterations to the directory `cartpole-logs` in your Azure Fileshare.
