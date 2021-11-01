@@ -364,18 +364,23 @@ class AzureBatchContainers(object):
                 scope=batchmodels.AutoUserScope.task,
             )
         )
-        if not start_dir:
-            start_dir = "src"
+        if (
+            not start_dir
+            and self.config["POOL"]["PUBLISHER"] != "MicrosoftWindowsServer"
+        ):
+            start_dir = "/src"
         if self.config["POOL"]["PUBLISHER"] == "MicrosoftWindowsServer":
+            if not start_dir:
+                start_dir = "src"
             extra_opts = f"-w C:\\{start_dir}\\"
         else:
-            extra_opts = f"--workdir /{start_dir}/"
+            extra_opts = f"--workdir {start_dir}/"
 
         if self.use_fileshare:
             if self.config["POOL"]["PUBLISHER"] == "MicrosoftWindowsServer":
                 mount = f"S:\\:C:\\{start_dir}\\logs"
             else:
-                mount = f"/azfileshare/:/{start_dir}/logs"
+                mount = f"/azfileshare/:{start_dir}/logs"
             extra_opts += f" --volume {mount}"
 
         self.task_id = task_name
@@ -443,7 +448,7 @@ class AzureBatchContainers(object):
         brain_name: str = None,
         wait_for_tasks: bool = False,
         log_iterations: bool = False,
-        workdir: str = None,
+        workdir: str = "/src",
         show_price: bool = True,
         wait_time: int = 10,
         delay_next: int = 0,
@@ -562,7 +567,7 @@ def run_tasks(
     vm_sku: str = None,
     config_file: str = user_config,
     log_iterations: Union[bool, str] = False,
-    workdir: str = None,
+    workdir: str = "/src",
     image_name: str = None,
     image_version: str = None,
     platform: str = None,
@@ -684,6 +689,7 @@ def run_tasks(
                 vm_sku = confirm_sku
 
     config["POOL"]["VM_SIZE"] = vm_sku
+    config["POOL"]["TASK_START_DIR"] = workdir
 
     if not image_name:
         image_name = config["ACR"]["IMAGE_NAME"]
