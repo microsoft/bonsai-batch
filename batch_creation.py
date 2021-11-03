@@ -155,11 +155,13 @@ class AzCreateBatch:
             )
         )
 
-    def create_app_insight(self, insight_acct: str):
+    def create_app_insight(self, insight_acct: str) -> Dict:
 
-        azure_cli_run(
+        app_insight_info = azure_cli_run(
             f"monitor app-insights component create --app {insight_acct} --loc {self.loc} --resource-group {self.rg}"
         )
+
+        return app_insight_info
 
 
 class AzExtract:
@@ -428,14 +430,26 @@ def create_resources(
     az_create.create_batch(batch)
     az_create.create_store(store)
     az_create.connect_store_batch(batch_account=batch, storage_account=store)
-    if create_app_insights:
-        az_create.create_app_insight(app_insights)
 
     # if rg_loc is not provided make it the same as loc since we need to write it
     if not rg_loc:
         rg_loc = loc
 
     write_azure_config(rg, acr, store, batch, loc, rg_loc, conf_file, new_conf_file)
+
+    if create_app_insights:
+        app_insights_info = az_create.create_app_insight(app_insights)
+        config = configparser.ConfigParser()
+        config.read(new_conf_file)
+        config["APP_INSIGHTS"]["INSTRUMENTATION_KEY"] = app_insights_info[
+            "instrumentationKey"
+        ]
+        config["APP_INSIGHTS"]["APP_ID"] = app_insights_info["appId"]
+        config["APP_INSIGHTS"][
+            "BATCH_INSIGHTS_DOWNLOAD_URL"
+        ] = "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights"
+        with open(new_conf_file, "w") as configfile:
+            config.write(configfile)
 
     if create_fileshare:
         config = configparser.ConfigParser()
@@ -563,3 +577,11 @@ if __name__ == "__main__":
     # loc = "westus"
     # batch = "aztestbatch"
     # create_resources(rg=rg, acr=acr, loc=loc, store=store, batch=batch)
+
+    # rg = "azbatchinsightsrg"
+    # loc = "westus"
+    # acr = "azbatchinsightsrgacr"
+    # store = "azbatchinsightsrgstore"
+    # batch = "azbatchinsightsrgbatch"
+
+    # create_resources(rg=rg, acr=acr, store=store, batch=batch, loc=loc)
