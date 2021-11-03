@@ -445,9 +445,16 @@ def create_resources(
             "instrumentationKey"
         ]
         config["APP_INSIGHTS"]["APP_ID"] = app_insights_info["appId"]
-        config["APP_INSIGHTS"][
-            "BATCH_INSIGHTS_DOWNLOAD_URL"
-        ] = "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights"
+        if config["ACR"]["PLATFORM"] == "linux":
+            config["APP_INSIGHTS"][
+                "BATCH_INSIGHTS_DOWNLOAD_URL"
+            ] = "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights"
+        elif config["ACR"]["PLATFORM"] == "windows":
+            config["APP_INSIGHTS"][
+                "BATCH_INSIGHTS_DOWNLOAD_URL"
+            ] = "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights.exe"
+        else:
+            raise ValueError(f"Unknown platform selected {config['ACR']['PLATFORM']}")
         with open(new_conf_file, "w") as configfile:
             config.write(configfile)
 

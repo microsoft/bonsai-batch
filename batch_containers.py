@@ -228,7 +228,12 @@ class AzureBatchContainers(object):
                 scope=batch.models.AutoUserScope.pool,
                 elevation_level=batch.models.ElevationLevel.admin,
             )
-            command_line = "/bin/bash -c 'wget  -O - https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-linux.sh | bash'"
+            if self.config["ACR"]["PLATFORM"] == "linux":
+                command_line = "/bin/bash -c 'wget  -O - https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-linux.sh | bash'"
+            elif self.config["ACR"]["PLATFORM"] == "windows":
+                command_line = 'cmd /c @/"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe/" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command /"iex ((New-Object System.Net.WebClient).DownloadString(\'https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-windows.ps1\'))/"'
+            else:
+                raise ValueError(f"Unknown platform selected {self.config['ACR']['PLATFORM']}")
             start_task = batch.models.StartTask(
                 command_line=command_line,
                 user_identity=batch.models.UserIdentity(auto_user=user),
