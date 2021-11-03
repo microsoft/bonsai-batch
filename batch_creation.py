@@ -102,7 +102,11 @@ class AzCreateBatch:
             Name of Azure Container Registry to create.
         """
 
-        azure_cli_run("acr create -n {0} -g {1} -l {2} --sku Standard".format(acr, self.rg, self.loc))
+        azure_cli_run(
+            "acr create -n {0} -g {1} -l {2} --sku Standard".format(
+                acr, self.rg, self.loc
+            )
+        )
         azure_cli_run("acr update -n {0} --admin-enabled true".format(acr))
 
     def create_batch(self, batch: str):
@@ -149,6 +153,12 @@ class AzCreateBatch:
             "batch account set -g {0} -n {1} --storage-account {2}".format(
                 self.rg, batch_account, storage_account
             )
+        )
+
+    def create_app_insight(self, insight_acct: str):
+
+        azure_cli_run(
+            f"monitor app-insights component create --app {insight_acct} --loc {self.loc} --resource-group {self.rg}"
         )
 
 
@@ -354,11 +364,13 @@ def create_resources(
     acr: str = None,
     store: str = None,
     batch: str = None,
+    app_insights: str = None,
     loc: str = "westus",
     rg_loc: Union[str, None] = None,
     conf_file: str = default_config,
     new_conf_file: str = user_config,
     create_fileshare: bool = True,
+    create_app_insights: bool = True,
     always_ask: bool = False,
     auto_convert: bool = True,
 ):
@@ -407,6 +419,8 @@ def create_resources(
         store = rg + "store"
     if not batch:
         batch = rg + "batch"
+    if not app_insights:
+        app_insights = rg + "insights"
 
     az_create = AzCreateBatch(rg, loc=loc)
     az_create.create_rg(rg_loc=rg_loc)
@@ -414,6 +428,8 @@ def create_resources(
     az_create.create_batch(batch)
     az_create.create_store(store)
     az_create.connect_store_batch(batch_account=batch, storage_account=store)
+    if create_app_insights:
+        az_create.create_app_insight(app_insights)
 
     # if rg_loc is not provided make it the same as loc since we need to write it
     if not rg_loc:
