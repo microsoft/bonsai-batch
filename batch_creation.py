@@ -102,7 +102,11 @@ class AzCreateBatch:
             Name of Azure Container Registry to create.
         """
 
-        azure_cli_run("acr create -n {0} -g {1} -l {2} --sku Standard".format(acr, self.rg, self.loc))
+        azure_cli_run(
+            "acr create -n {0} -g {1} -l {2} --sku Standard".format(
+                acr, self.rg, self.loc
+            )
+        )
         azure_cli_run("acr update -n {0} --admin-enabled true".format(acr))
 
     def create_batch(self, batch: str):
@@ -150,6 +154,14 @@ class AzCreateBatch:
                 self.rg, batch_account, storage_account
             )
         )
+
+    def create_app_insight(self, insight_acct: str) -> Dict:
+
+        app_insight_info = azure_cli_run(
+            f"monitor app-insights component create --app {insight_acct} --loc {self.loc} --resource-group {self.rg}"
+        )
+
+        return app_insight_info
 
 
 class AzExtract:
@@ -354,11 +366,13 @@ def create_resources(
     acr: str = None,
     store: str = None,
     batch: str = None,
+    app_insights: str = None,
     loc: str = "westus",
     rg_loc: Union[str, None] = None,
     conf_file: str = default_config,
     new_conf_file: str = user_config,
     create_fileshare: bool = True,
+    create_app_insights: bool = True,
     always_ask: bool = False,
     auto_convert: bool = True,
 ):
@@ -407,6 +421,8 @@ def create_resources(
         store = rg + "store"
     if not batch:
         batch = rg + "batch"
+    if not app_insights:
+        app_insights = rg + "insights"
 
     az_create = AzCreateBatch(rg, loc=loc)
     az_create.create_rg(rg_loc=rg_loc)
@@ -420,6 +436,27 @@ def create_resources(
         rg_loc = loc
 
     write_azure_config(rg, acr, store, batch, loc, rg_loc, conf_file, new_conf_file)
+
+    if create_app_insights:
+        app_insights_info = az_create.create_app_insight(app_insights)
+        config = configparser.ConfigParser()
+        config.read(new_conf_file)
+        config["APP_INSIGHTS"]["INSTRUMENTATION_KEY"] = app_insights_info[
+            "instrumentationKey"
+        ]
+        config["APP_INSIGHTS"]["APP_ID"] = app_insights_info["appId"]
+        if config["ACR"]["PLATFORM"] == "linux":
+            config["APP_INSIGHTS"][
+                "BATCH_INSIGHTS_DOWNLOAD_URL"
+            ] = "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights"
+        elif config["ACR"]["PLATFORM"] == "windows":
+            config["APP_INSIGHTS"][
+                "BATCH_INSIGHTS_DOWNLOAD_URL"
+            ] = "https://github.com/Azure/batch-insights/releases/download/v1.3.0/batch-insights.exe"
+        else:
+            raise ValueError(f"Unknown platform selected {config['ACR']['PLATFORM']}")
+        with open(new_conf_file, "w") as configfile:
+            config.write(configfile)
 
     if create_fileshare:
         config = configparser.ConfigParser()
@@ -547,3 +584,11 @@ if __name__ == "__main__":
     # loc = "westus"
     # batch = "aztestbatch"
     # create_resources(rg=rg, acr=acr, loc=loc, store=store, batch=batch)
+
+    # rg = "azbatchinsightsrg"
+    # loc = "westus"
+    # acr = "azbatchinsightsrgacr"
+    # store = "azbatchinsightsrgstore"
+    # batch = "azbatchinsightsrgbatch"
+
+    # create_resources(rg=rg, acr=acr, store=store, batch=batch, loc=loc)

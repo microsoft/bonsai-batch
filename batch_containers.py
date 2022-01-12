@@ -174,7 +174,9 @@ class AzureBatchContainers(object):
 
         return self.batch_client
 
-    def create_pool(self, skip_if_exists=True, use_fileshare: bool = True):
+    def create_pool(
+        self, skip_if_exists=True, use_fileshare: bool = True, app_insights: bool = True
+    ):
         """Create an Azure Batch Pool. All necessary parameters should be listed in config['POOL'], and saves pool to self.pool_id.
 
         Parameters
@@ -220,6 +222,42 @@ class AzureBatchContainers(object):
         else:
             fileshare_mount = None
 
+        if app_insights:
+            # must run in admin mode
+            user = batch.models.AutoUserSpecification(
+                scope=batch.models.AutoUserScope.pool,
+                elevation_level=batch.models.ElevationLevel.admin,
+            )
+            if self.config["ACR"]["PLATFORM"] == "linux":
+                command_line = "/bin/bash -c 'wget  -O - https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-linux.sh | bash'"
+            elif self.config["ACR"]["PLATFORM"] == "windows":
+                command_line = 'cmd /c @/"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe/" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command /"iex ((New-Object System.Net.WebClient).DownloadString(\'https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-windows.ps1\'))/"'
+            else:
+                raise ValueError(f"Unknown platform selected {self.config['ACR']['PLATFORM']}")
+            start_task = batch.models.StartTask(
+                command_line=command_line,
+                user_identity=batch.models.UserIdentity(auto_user=user),
+                wait_for_success=True,
+                environment_settings=[
+                    batch.models.EnvironmentSetting(
+                        name="APP_INSIGHTS_INSTRUMENTATION_KEY",
+                        value=self.config["APP_INSIGHTS"]["INSTRUMENTATION_KEY"],
+                    ),
+                    batch.models.EnvironmentSetting(
+                        name="APP_INSIGHTS_APP_ID",
+                        value=self.config["APP_INSIGHTS"]["APP_ID"],
+                    ),
+                    batch.models.EnvironmentSetting(
+                        name="BATCH_INSIGHTS_DOWNLOAD_URL",
+                        value=self.config["APP_INSIGHTS"][
+                            "BATCH_INSIGHTS_DOWNLOAD_URL"
+                        ],
+                    ),
+                ],
+            )
+        else:
+            start_task = None
+
         self.new_pool = batch.models.PoolAddParameter(
             id=pool_id,
             virtual_machine_configuration=batch.models.VirtualMachineConfiguration(
@@ -233,6 +271,7 @@ class AzureBatchContainers(object):
             target_dedicated_nodes=pool_dedicated_node_count,
             target_low_priority_nodes=pool_low_priority_node_count,
             mount_configuration=fileshare_mount,
+            start_task=start_task,
         )
 
         if not skip_if_exists or not self.batch_client.pool.exists(pool_id):
@@ -452,22 +491,9 @@ class AzureBatchContainers(object):
         show_price: bool = True,
         wait_time: int = 10,
         delay_next: int = 0,
+        app_insights: bool = True,
     ):
         """Hub to run Bonsai scale-sim job. This adds the command as tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC']."""
-
-        self.create_pool(use_fileshare=log_iterations)
-        self.add_job()
-
-        if not brain_name:
-            brain_name = self.config["BONSAI"]["BRAIN_NAME"].strip("'")
-
-        logger.info(
-            "Using batch account {0} to run job {1} with {2} tasks".format(
-                self.config["BATCH"]["ACCOUNT_NAME"],
-                self.config["POOL"]["JOB_NAME"],
-                self.config["POOL"]["NUM_TASKS"],
-            )
-        )
 
         if show_price:
             vm_prices = show_hourly_price(
@@ -482,6 +508,20 @@ class AzureBatchContainers(object):
                 f":moneybag: Hourly cost of Batch Pool: ${vm_prices}. Pausing for {wait_time} seconds before submitting tasks. Press Ctrl-C to cancel job."
             )
             time.sleep(wait_time)
+
+        self.create_pool(use_fileshare=log_iterations, app_insights=app_insights)
+        self.add_job()
+
+        if not brain_name:
+            brain_name = self.config["BONSAI"]["BRAIN_NAME"].strip("'")
+
+        logger.info(
+            "Using batch account {0} to run job {1} with {2} tasks".format(
+                self.config["BATCH"]["ACCOUNT_NAME"],
+                self.config["POOL"]["JOB_NAME"],
+                self.config["POOL"]["NUM_TASKS"],
+            )
+        )
 
         for i in range(int(self.config["POOL"]["NUM_TASKS"])):
             if delay_next > 0:
@@ -574,6 +614,7 @@ def run_tasks(
     show_price: bool = True,
     wait_time: int = 10,
     time_delay: int = 0,
+    app_insights: bool = True,
 ):
     """Run simulators in Azure Batch.
 
@@ -619,6 +660,8 @@ def run_tasks(
         [description], by default 10
     time_delay: int, optional
         time to delay next task, by default 0
+    app_insights: bool, optional
+        whether to use application_insights to monitor azure batch pools
     """
 
     if not os.path.exists(config_file):
@@ -641,6 +684,7 @@ def run_tasks(
         ), "Number of tasks must equal number of tasks to run"
 
     total_nodes = low_pri_nodes + dedicated_nodes
+
     tasks_per_node = max(ceil(float(num_tasks) / total_nodes), 1)
 
     if platform:
@@ -743,6 +787,7 @@ def run_tasks(
         show_price=show_price,
         wait_time=wait_time,
         delay_next=time_delay,
+        app_insights=app_insights,
     )
 
 
@@ -985,10 +1030,7 @@ def get_brain_status(brain_name: str, brain_version: str, sleep_time):
 
 
 def connect_sims(
-    sim_name: str,
-    brain_name: str,
-    brain_version: str,
-    concept_name: str,
+    sim_name: str, brain_name: str, brain_version: str, concept_name: str,
 ):
 
     logger.info(f"Connecting simulators {sim_name} to {brain_name}:{brain_version}")
