@@ -7,6 +7,7 @@
 import configparser
 import datetime
 from distutils.command.config import config
+import json
 import os
 import pathlib
 import sys
@@ -202,7 +203,7 @@ class AzureBatchContainers(object):
         extra_opts = "/persistent:Yes"
         win_opts = "-Persist"
         if self.config["ACR"]["PLATFORM"] == "windows":
-            self.mount_path = "S"
+            self.mount_path = "Z"
             mount_options = win_opts
         else:
             self.mount_path = "azfiles"
@@ -233,7 +234,9 @@ class AzureBatchContainers(object):
             elif self.config["ACR"]["PLATFORM"] == "windows":
                 command_line = 'cmd /c @/"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe/" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command /"iex ((New-Object System.Net.WebClient).DownloadString(\'https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-windows.ps1\'))/"'
             else:
-                raise ValueError(f"Unknown platform selected {self.config['ACR']['PLATFORM']}")
+                raise ValueError(
+                    f"Unknown platform selected {self.config['ACR']['PLATFORM']}"
+                )
             start_task = batch.models.StartTask(
                 command_line=command_line,
                 user_identity=batch.models.UserIdentity(auto_user=user),
@@ -669,7 +672,8 @@ def run_tasks(
 
     config = configparser.ConfigParser()
     config.read(config_file)
-    platform = config["ACR"]["PLATFORM"]
+    if not platform:
+        platform = config["ACR"]["PLATFORM"]
 
     if not task_to_run:
         task_to_run = input(
@@ -915,7 +919,7 @@ def run_sims_connect(
     brain_list = json.loads(subprocess.check_output(brain_list_cmd.split(" ")))["value"]
     if brain_name not in brain_list:
         logger.warn(f"No brain {brain_name} found, creating...")
-        create_brain = f"bonsai brain create -n {brain_name} --description {notes}"
+        create_brain = f"bonsai brain create -n {brain_name}"
         logger.debug(create_brain)
         subprocess.check_output(create_brain.split(" "))
     else:
@@ -949,6 +953,8 @@ def run_sims_connect(
             logger.info(
                 f"Pushing inkling to brain name {brain_name} and brain-version {brain_version}"
             )
+            # update_notes = f"bonsai brain version update -n {brain_name} --version {brain_version} --notes {notes}"
+            # subprocess.check_output(update_notes.split(" "))
             push_ink = f"bonsai brain version update-inkling -f {ink_file} -n {brain_name} --version {brain_version}"
             logger.debug(push_ink)
             subprocess.check_output(push_ink.split(" "))
@@ -1010,6 +1016,54 @@ def run_sims_connect(
         raise ValueError(f"Unknown scale platform {scale_platform}")
 
     return brain_status
+
+
+def get_assessments(brain_name: str, brain_version: str):
+    assessments_status = f"bonsai brain version assessment list -b {brain_name} --brain-version {brain_version} -o json"
+    assessment_statuses = json.loads(
+        subprocess.check_output(assessments_status.split(" "))
+    )
+    return pd.DataFrame(assessment_statuses)
+
+
+def run_assessment(
+    brain_name: str,
+    brain_version: str,
+    concept_name: str,
+    assess_file: str,
+    assess_name: str,
+    episode_limit: int,
+    sim_package: str,
+    num_instances: int,
+):
+
+    assessments_status = f"bonsai brain version assessment list -b {brain_name} --brain-version {brain_version} -o json"
+    assessment_statuses = json.loads(
+        subprocess.check_output(assessments_status.split(" "))
+    )
+
+    still_running_assess = not (
+        all(pd.DataFrame(assessment_statuses)["status"] == "Succeeded")
+    )
+    while still_running_assess:
+        logger.info(
+            f"Assessment currently in progress for {brain_name} and version: {brain_version}, waiting for it to finish"
+        )
+        time.sleep(60)
+        assessments_status = f"bonsai brain version assessment list -b {brain_name} --brain-version {brain_version} -o json"
+        assessment_statuses = json.loads(
+            subprocess.check_output(assessments_status.split(" "))
+        )
+        still_running_assess = not (
+            all(pd.DataFrame(assessment_statuses)["status"] == "Succeeded")
+        )
+
+    assess_cmd = f"bonsai brain version assessment start -b {brain_name} --brain-version {brain_version} -c {concept_name} -f {assess_file} -n {assess_name} --episode-iteration-limit {episode_limit} --simulator-package-name {sim_package} -i {num_instances}"
+    logger.debug(assess_cmd)
+    logger.info(f"Starting assessment on {brain_name} and version {brain_version}")
+    assess_result = subprocess.check_output(assess_cmd.split(" "))
+
+    return assess_result
 
 
 def get_brain_status(brain_name: str, brain_version: str, sleep_time):
