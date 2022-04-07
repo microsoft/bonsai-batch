@@ -26,7 +26,7 @@
 ## Provisioning a Pool within a Virtual Network
 
 1. [Create](https://docs.microsoft.com/en-us/azure/virtual-network/manage-virtual-network#create-a-virtual-network) a virtual network using the [Azure Portal](https://docs.microsoft.com/en-us/azure/virtual-network/quick-create-portal) or through the [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/network/vnet?view=azure-cli-latest#az-network-vnet-create). Ensure it meets the requirements specified above.
-2. Copy the resource identifier for the virtual network and paste it into the configuration file at `config["VNET"]["SUBNET_ID"]`.
+2. Copy the resource identifier for the virtual network and paste it into the configuration file at `config["VNET"]["SUBNET_ID"]`. Should be of the form: `/subscriptions/subscription-id/resourceGroups/resource-group-id/providers/Microsoft.Network/virtualNetworks/vnet-name/subnets/subnet-name`
 3. Paste the `client_id`, `secret` and `tenant_id` you created for your service principal and application into the values in `config["SERVICE"]`.
 4. Run your tasks with your virtual network:
 
