@@ -1,20 +1,26 @@
 # Example: Provisioning a Pool within a Virtual Network
 
-1. Create Virtual network and subnet
-2. Provision Pool
-3. Run tasks
+## Overview
+
+1. Create Virtual Network
+2. Create a service principal
+3. Add `Contributor` access for the Virtual Network and the Batch Account to the service principal
+4. Update configuration files (`config.ini`)
+5. Run tasks with `python batch_containers.py run_tasks --use_service_principal=True --use_vnet=True`
 
 ## Requirements
 
+- Resource group, batch account, storage account, and virtual network
+  - You can create the first three using the command: `python batch_creation.py create_resources`
 - **Authentication**: the Batch Client API must use Azure Active Directory (AAD) authentication. For our purposes we will use a Service Principal to authenticate our batch requests to AAD:
   - Please [register your Azure batch application](https://docs.microsoft.com/en-us/azure/batch/batch-aad-auth#register-your-application-with-a-tenant) with AAD.
   - Retrieve a [tenand id](https://docs.microsoft.com/en-us/azure/batch/batch-aad-auth#get-the-tenant-id-for-your-active-directory) for your Azure Active Directory and paste it into the configuration file provided.
-  - Create a [secret](af1904e2-a0a9-4553-9a74-577567df8762) for your application and retrieve the key.
-	- Use the Azure IAM portal to assign `Contributor` access to the batch pool and virtual network
+  - Create a [secret](af1904e2-a0a9-4553-9a74-577567df8762) for your application and retrieve the key
+  - Use the Azure IAM portal to assign `Contributor` access to the batch pool and virtual network
 
 ## VNet requirements
 
-- **Region and subscription**: the VNet must be in the same subscription and region as the batch account you use to create the pool
+- **Region and subscription**: the VNet must be in the **same subscription and region** as the batch account you use to create the pool
 - **Subnet size**: the subnet must have enough unassigned IP addresses to accommodate the number of VMs targeted for the pool. This should equal the number of total nodes you request, i.e., the sum of `LOW_PRI_NODES` and `DEDICATED_NODES` in your configuration file.
 
 ## Provisioning a Pool within a Virtual Network
