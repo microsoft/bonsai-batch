@@ -3,7 +3,7 @@
 ## Overview
 
 1. Create Virtual Network
-2. Create a service principal
+2. Create a service principal (service principal is the recommended approach, but see [other options](https://docs.microsoft.com/en-us/azure/batch/batch-aad-auth#request-a-secret-for-your-application) for authenticating with batch)
 3. Add `Contributor` access for the Virtual Network and the Batch Account to the service principal
 4. Update configuration files (`config.ini`)
 5. Run tasks with `python batch_containers.py run_tasks --use_service_principal=True --use_vnet=True`
