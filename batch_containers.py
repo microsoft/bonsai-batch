@@ -8,6 +8,7 @@ import configparser
 import datetime
 from distutils.command.config import config
 import json
+from multiprocessing.sharedctypes import Value
 import os
 import pathlib
 import sys
@@ -137,10 +138,10 @@ class AzureBatchContainers(object):
 
     def authenticate_batch(
         self,
+        tenant_id: Union[str, None] = None,
+        client_id: Union[str, None] = None,
+        secret: Union[str, None] = None,
         service_principal: bool = False,
-        tenant_id: str = None,
-        client_id: str = None,
-        secret: str = None,
     ):
         """Authenticate to Batch service using credential provided in config['BATCH'], and saves batch client to self.batch_client.
 
@@ -176,7 +177,11 @@ class AzureBatchContainers(object):
         return self.batch_client
 
     def create_pool(
-        self, skip_if_exists=True, use_fileshare: bool = True, app_insights: bool = True
+        self,
+        skip_if_exists=True,
+        use_fileshare: bool = True,
+        app_insights: bool = True,
+        use_vnet: bool = False,
     ):
         """Create an Azure Batch Pool. All necessary parameters should be listed in config['POOL'], and saves pool to self.pool_id.
 
@@ -222,6 +227,17 @@ class AzureBatchContainers(object):
             fileshare_mount = [fileshare_mount]
         else:
             fileshare_mount = None
+
+        if use_vnet:
+            # add subnet, NAT rules, and public IPs
+            # https://docs.microsoft.com/en-us/python/api/azure-batch/azure.batch.models.networkconfiguration?view=azure-python
+            network_config = batchmodels.NetworkConfiguration(
+                subnet_id=self.config["VNET"]["SUBNET_ID"],
+                # endpoint_configuration=self.config["VNET"]["ENDPOINT_CONFIG"],
+                # public_ips=self.config["VNET"]["PUBLIC_IPS"],
+            )
+        else:
+            network_config = None
 
         if app_insights:
             # must run in admin mode
@@ -275,9 +291,10 @@ class AzureBatchContainers(object):
             target_low_priority_nodes=pool_low_priority_node_count,
             mount_configuration=fileshare_mount,
             start_task=start_task,
+            network_configuration=network_config,
         )
 
-        if not skip_if_exists or not self.batch_client.pool.exists(pool_id):
+        if use_vnet or not skip_if_exists or not self.batch_client.pool.exists(pool_id):
             logger.warning(
                 "Creating new pool named [bold magenta]{}[/bold magenta]".format(
                     pool_id
@@ -495,6 +512,7 @@ class AzureBatchContainers(object):
         wait_time: int = 10,
         delay_next: int = 0,
         app_insights: bool = True,
+        use_vnet: bool = False,
     ):
         """Hub to run Bonsai scale-sim job. This adds the command as tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC']."""
 
@@ -512,7 +530,9 @@ class AzureBatchContainers(object):
             )
             time.sleep(wait_time)
 
-        self.create_pool(use_fileshare=log_iterations, app_insights=app_insights)
+        self.create_pool(
+            use_fileshare=log_iterations, app_insights=app_insights, use_vnet=use_vnet
+        )
         self.add_job()
 
         if not brain_name:
@@ -617,7 +637,8 @@ def run_tasks(
     show_price: bool = True,
     wait_time: int = 10,
     time_delay: int = 0,
-    app_insights: bool = True,
+    app_insights: bool = False,
+    use_vnet: bool = False,
 ):
     """Run simulators in Azure Batch.
 
@@ -665,6 +686,8 @@ def run_tasks(
         time to delay next task, by default 0
     app_insights: bool, optional
         whether to use application_insights to monitor azure batch pools
+    use_vnet: bool, optional
+        whether your batch pool should be provisioned in a (pre-existing) virtual network
     """
 
     if not os.path.exists(config_file):
@@ -770,6 +793,9 @@ def run_tasks(
     with open(config_file, "w") as conf_file:
         config.write(conf_file)
 
+    if use_vnet and not use_service_principal:
+        raise ValueError("You must use a service principal to use a virtual network.")
+
     batch_run = AzureBatchContainers(
         config_file=config_file,
         service_principal=use_service_principal,
@@ -792,6 +818,7 @@ def run_tasks(
         wait_time=wait_time,
         delay_next=time_delay,
         app_insights=app_insights,
+        use_vnet=use_vnet,
     )
 
 
@@ -1084,7 +1111,10 @@ def get_brain_status(brain_name: str, brain_version: str, sleep_time):
 
 
 def connect_sims(
-    sim_name: str, brain_name: str, brain_version: str, concept_name: str,
+    sim_name: str,
+    brain_name: str,
+    brain_version: str,
+    concept_name: str,
 ):
 
     logger.info(f"Connecting simulators {sim_name} to {brain_name}:{brain_version}")
@@ -1109,6 +1139,13 @@ def connect_sims(
 if __name__ == "__main__":
 
     fire.Fire()
+    # run_tasks(
+    # task_to_run="python main.py",
+    # num_tasks=10,
+    # vm_sku="Standard_E2s_v3",
+    # use_service_principal=True,
+    # use_vnet=True
+    # )
     # nodes = list_pool_nodes(pool_name="PowerMount999")
     # run_tasks(image_name="winhouse")
     # batch_run = AzureBatchContainers(config_file=user_config)

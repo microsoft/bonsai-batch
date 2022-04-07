@@ -157,11 +157,22 @@ class AzCreateBatch:
 
     def create_app_insight(self, insight_acct: str) -> Dict:
 
+        azure_cli_run("config set extension.use_dynamic_install=yes_without_prompt")
         app_insight_info = azure_cli_run(
             f"monitor app-insights component create --app {insight_acct} --loc {self.loc} --resource-group {self.rg}"
         )
 
         return app_insight_info
+
+    def create_vnet(self, vnet_name: str) -> Dict:
+
+        # https://docs.microsoft.com/en-us/cli/azure/network/vnet?view=azure-cli-latest#az-network-vnet-create
+
+        vnet_info = azure_cli_run(
+            f"--network vnet create --name {vnet_name} --resource-group {self.rg}"
+        )
+
+        return vnet_info
 
 
 class AzExtract:
@@ -372,7 +383,7 @@ def create_resources(
     conf_file: str = default_config,
     new_conf_file: str = user_config,
     create_fileshare: bool = True,
-    create_app_insights: bool = True,
+    create_app_insights: bool = False,
     always_ask: bool = False,
     auto_convert: bool = True,
 ):
