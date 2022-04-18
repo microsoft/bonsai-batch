@@ -33,3 +33,13 @@
 ```bash
 python batch_containers.py run_tasks --use_service_principal=True --use_vnet=True
 ```
+
+## Containerizing AnyLogic Models and Running in Batch
+
+To run an AnyLogic simulator on Azure Batch, you should ensure that you have the `exported.zip` archive containing your AnyLogic simulation model. Place that in a folder along with the Dockerfile provided in `samples/abca/Dockerfile`. You can then build and push the image to ACR in one-step using `python batch_creation.build_image` or in two separate steps using 1. (to build) using `docker build -t <your-image-name> .` and 2. (to tag and push it to ACR) with `docker tag <your-image-name> <your-registry-name>.azurecr.io/<your-image-name>` and `docker push <your-registry-name>.azurecr.io/<your-image-name>`.
+
+Then to run the tasks on Azure Batch:
+
+```bash
+python batch_containers.py run_tasks --use_service_principal=True --use_vnet=True --task_to_run="find -name '*_linux.sh' -exec sh {} \;"
+```
