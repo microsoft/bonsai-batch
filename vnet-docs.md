@@ -43,3 +43,29 @@ Then to run the tasks on Azure Batch:
 ```bash
 python batch_containers.py run_tasks --use_service_principal=True --use_vnet=True --task_to_run="find -name '*_linux.sh' -exec sh {} \;"
 ```
+
+Please also ensure that you have a `.env` file saved locally with your (unexpired) Bonsai workspace id and access-key, or that you enter them manually using their arguments:
+
+```bash
+python batch_containers.py \
+  run_tasks --use_service_principal=True --use_vnet=True \
+  --task_to_run="find -name '*_linux.sh' -exec sh {} \;" \
+  --workspace=<your-bonsai-workspace-id> \
+  --access_key=<your-bonsai-access-key>
+```
+
+Warnings may appear in your `stdout.txt` of the form:
+
+```
+chmod: chromium/chromium-linux64/chrome: No such file or directory
+```
+
+This is not a breaking error and can be safely ignored. However, if you see the following
+
+```bash
+Exception in thread "Thread-1" Exception in thread "main" java.lang.RuntimeException: Protection error
+        at java.lang.Thread.run(Thread.java:748)
+java.lang.RuntimeException: Reinforcement Learning Experiment couldn't be created.        at activity_based_costing_analysis_bonsai.RLExperiment.main(RLExperiment.java:256)Caused by: java.lang.reflect.InvocationTargetException        ... 1 moreCaused by: java.lang.RuntimeException: Protection error        ... 1 more
+```
+
+this is a sign that you have not provided your Bonsai workspace-id and access-key correctly.
