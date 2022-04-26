@@ -31,6 +31,7 @@
 
 - **Region and subscription**: the VNet must be in the **same subscription and region** as the batch account you use to create the pool
 - **Subnet size**: the subnet must have enough unassigned IP addresses to accommodate the number of VMs targeted for the pool. This should equal the number of total nodes you request, i.e., the sum of `LOW_PRI_NODES` and `DEDICATED_NODES` in your configuration file.
+- **Allowed outbound endpoints**: make sure that you have enabled outbound access to the Bonsai service, located at `api.bons.ai:443 `
 
 ## Provisioning a Pool within a Virtual Network
 
