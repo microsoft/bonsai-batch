@@ -18,6 +18,15 @@
   - Create a [secret](af1904e2-a0a9-4553-9a74-577567df8762) for your application and retrieve the key
   - Use the Azure IAM portal to assign `Contributor` access to the batch pool and virtual network
 
+## Adding an Application to AAD
+
+1. Locate your Azure Active Directory (or create a new one) from the Azure portal. Locate your tenant-id and copy it to the configuration file `userconfig.ini` under `[SERVICE][TENANT_ID]`.
+2. Navigate to the sidebar to App registrations:
+    ![](imgs/aad-app.png)  
+3. Click `New registration` and follow the wizard to create your application (the redirect URI can be safely left blank)
+4. Click on `Certificates & secrets` and create a new secret. Copy the secret value (⚠️ important to copy the value, not the key) and paste it into the user configuration file `userconfig.ini` under `[SERVICE][SECRET]`.
+5. Return to the homepage of your application, and locate the `Application (client) ID`. Copy the value and paste it into the user configuration file `userconfig.ini` under `[SERVICE][CLIENT_ID]`.
+
 ## VNet requirements
 
 - **Region and subscription**: the VNet must be in the **same subscription and region** as the batch account you use to create the pool
