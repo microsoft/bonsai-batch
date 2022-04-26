@@ -1,6 +1,8 @@
 # Example: Provisioning a Pool within a Virtual Network
 
-## Overview
+This example shows how to [provision a pool within a virtual network](https://docs.microsoft.com/en-us/azure/batch/batch-virtual-network).
+
+## tldr (short summary)
 
 1. Create Virtual Network
 2. Create a service principal (service principal is the recommended approach, but see [other options](https://docs.microsoft.com/en-us/azure/batch/batch-aad-auth#request-a-secret-for-your-application) for authenticating with batch)
@@ -18,7 +20,15 @@
   - Create a [secret](af1904e2-a0a9-4553-9a74-577567df8762) for your application and retrieve the key
   - Use the Azure IAM portal to assign `Contributor` access to the batch pool and virtual network
 
+## VNet Requirements
+
+- **Region and subscription**: the VNet must be in the **same subscription and region** as the batch account you use to create the pool
+- **Subnet size**: the subnet must have enough unassigned IP addresses to accommodate the number of VMs targeted for the pool. This should equal the number of total nodes you request, i.e., the sum of `LOW_PRI_NODES` and `DEDICATED_NODES` in your configuration file.
+- **Allowed outbound endpoints**: make sure that you have enabled outbound access to the Bonsai service, located at `api.bons.ai:443 `
+
 ## Adding an Application to AAD
+
+In order to allow for secure authentication to the Azure Virtual Network, we will need to [register our batch application](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app) with the Microsoft Identity platform.
 
 1. Locate your Azure Active Directory (or create a new one) from the Azure portal. Locate your tenant-id and copy it to the configuration file `userconfig.ini` under `[SERVICE][TENANT_ID]`.
 2. Navigate to the sidebar to App registrations:
@@ -26,12 +36,6 @@
 3. Click `New registration` and follow the wizard to create your application (the redirect URI can be safely left blank)
 4. Click on `Certificates & secrets` and create a new secret. Copy the secret value (⚠️ important to copy the value, not the key) and paste it into the user configuration file `userconfig.ini` under `[SERVICE][SECRET]`.
 5. Return to the homepage of your application, and locate the `Application (client) ID`. Copy the value and paste it into the user configuration file `userconfig.ini` under `[SERVICE][CLIENT_ID]`.
-
-## VNet requirements
-
-- **Region and subscription**: the VNet must be in the **same subscription and region** as the batch account you use to create the pool
-- **Subnet size**: the subnet must have enough unassigned IP addresses to accommodate the number of VMs targeted for the pool. This should equal the number of total nodes you request, i.e., the sum of `LOW_PRI_NODES` and `DEDICATED_NODES` in your configuration file.
-- **Allowed outbound endpoints**: make sure that you have enabled outbound access to the Bonsai service, located at `api.bons.ai:443 `
 
 ## Provisioning a Pool within a Virtual Network
 
