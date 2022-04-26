@@ -52,8 +52,10 @@ In order to allow for secure authentication to the Azure Virtual Network, we wil
 5. Run your tasks with your virtual network:
 
 ```bash
-python batch_containers.py run_tasks --use_service_principal=True --use_vnet=True
+python batch_containers.py run_tasks --use_service_principal=True --use_vnet=True --workdir="/"
 ```
+
+⚠️ Ensure you specify the `workdir` argument or update the `TASK_START_DIR` in your configuration file when invoking this function and it corresponds to where your entrypoint script is located in your located.
 
 ## Containerizing AnyLogic Models and Running in Batch
 
@@ -70,9 +72,17 @@ Please also ensure that you have a `.env` file saved locally with your (unexpire
 ```bash
 python batch_containers.py \
   run_tasks --use_service_principal=True --use_vnet=True \
+  # specify the task you want to run; this is the default for anylogic sims
   --task_to_run="find -name '*_linux.sh' -exec sh {} \;" \
+  # either provide your workspace and access-keys in the `.env` file or manually
   --workspace=<your-bonsai-workspace-id> \
-  --access_key=<your-bonsai-access-key>
+  --access_key=<your-bonsai-access-key> \
+  # specify the number of nodes you want to create and use in your pool
+  --dedicated_nodes=0 \
+  --low_pri_nodes=1 \
+  # the start directory where you invoke commands from, default is "/" for anylogic sims
+  # you can also provide this in the configuration file under `TASK_START_DIR`
+  --workdir="/"
 ```
 
 Warnings may appear in your `stdout.txt` of the form:

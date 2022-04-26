@@ -93,7 +93,9 @@ class AzureBatchContainers(object):
             # pool needs to be created before fileshare can be activated
             self.use_fileshare = False
 
-    def get_container_registry(self):
+    def get_container_registry(
+        self, use_managed_identity: bool = False, resource_id_name: str = None
+    ):
         """Creates an attribute called registry which attaches to your ACR account provided in config.
 
         Returns
@@ -110,11 +112,23 @@ class AzureBatchContainers(object):
         )
         self.image_version = self.config["ACR"]["IMAGE_VERSION"].strip("'")
 
-        self.registry = batch.models.ContainerRegistry(
-            registry_server=self.config["ACR"]["SERVER"].strip("'"),
-            user_name=self.config["ACR"]["USERNAME"].strip("'"),
-            password=self.config["ACR"]["PASSWORD"].strip("'"),
-        )
+        if use_managed_identity:
+            managed_identity_resource = (
+                batchmodels.ComputeNodeIdentityReference(resource_id=resource_id_name),
+            )
+            self.registry = batchmodels.ContainerRegistry(
+                registry_server=self.config["ACR"]["SERVER"].strip("'"),
+                user_name=None,
+                password=None,
+                identity_reference=managed_identity_resource,
+            )
+
+        else:
+            self.registry = batchmodels.ContainerRegistry(
+                registry_server=self.config["ACR"]["SERVER"].strip("'"),
+                user_name=self.config["ACR"]["USERNAME"].strip("'"),
+                password=self.config["ACR"]["PASSWORD"].strip("'"),
+            )
 
         return self.registry
 
@@ -630,7 +644,7 @@ def run_tasks(
     vm_sku: str = None,
     config_file: str = user_config,
     log_iterations: Union[bool, str] = False,
-    workdir: str = "/src",
+    workdir: str = None,
     image_name: str = None,
     image_version: str = None,
     platform: str = None,
@@ -809,6 +823,12 @@ def run_tasks(
 
     if type(log_iterations) == str:
         log_iterations = bool(strtobool(log_iterations))
+
+    if workdir == None:
+        workdir = config["POOL"]["TASK_START_DIR"]
+        logger.info(
+            f"Start directory not specified, using location specified in config file: {workdir}"
+        )
 
     batch_run.batch_main(
         command=task_to_run,
