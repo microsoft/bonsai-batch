@@ -7,6 +7,8 @@
 import configparser
 import datetime
 from distutils.command.config import config
+import json
+from multiprocessing.sharedctypes import Value
 import os
 import pathlib
 import sys
@@ -91,7 +93,9 @@ class AzureBatchContainers(object):
             # pool needs to be created before fileshare can be activated
             self.use_fileshare = False
 
-    def get_container_registry(self):
+    def get_container_registry(
+        self, use_managed_identity: bool = False, resource_id_name: str = None
+    ):
         """Creates an attribute called registry which attaches to your ACR account provided in config.
 
         Returns
@@ -108,11 +112,23 @@ class AzureBatchContainers(object):
         )
         self.image_version = self.config["ACR"]["IMAGE_VERSION"].strip("'")
 
-        self.registry = batch.models.ContainerRegistry(
-            registry_server=self.config["ACR"]["SERVER"].strip("'"),
-            user_name=self.config["ACR"]["USERNAME"].strip("'"),
-            password=self.config["ACR"]["PASSWORD"].strip("'"),
-        )
+        if use_managed_identity:
+            managed_identity_resource = (
+                batchmodels.ComputeNodeIdentityReference(resource_id=resource_id_name),
+            )
+            self.registry = batchmodels.ContainerRegistry(
+                registry_server=self.config["ACR"]["SERVER"].strip("'"),
+                user_name=None,
+                password=None,
+                identity_reference=managed_identity_resource,
+            )
+
+        else:
+            self.registry = batchmodels.ContainerRegistry(
+                registry_server=self.config["ACR"]["SERVER"].strip("'"),
+                user_name=self.config["ACR"]["USERNAME"].strip("'"),
+                password=self.config["ACR"]["PASSWORD"].strip("'"),
+            )
 
         return self.registry
 
@@ -136,10 +152,10 @@ class AzureBatchContainers(object):
 
     def authenticate_batch(
         self,
+        tenant_id: Union[str, None] = None,
+        client_id: Union[str, None] = None,
+        secret: Union[str, None] = None,
         service_principal: bool = False,
-        tenant_id: str = None,
-        client_id: str = None,
-        secret: str = None,
     ):
         """Authenticate to Batch service using credential provided in config['BATCH'], and saves batch client to self.batch_client.
 
@@ -175,7 +191,11 @@ class AzureBatchContainers(object):
         return self.batch_client
 
     def create_pool(
-        self, skip_if_exists=True, use_fileshare: bool = True, app_insights: bool = True
+        self,
+        skip_if_exists=True,
+        use_fileshare: bool = True,
+        app_insights: bool = True,
+        use_vnet: bool = False,
     ):
         """Create an Azure Batch Pool. All necessary parameters should be listed in config['POOL'], and saves pool to self.pool_id.
 
@@ -202,7 +222,7 @@ class AzureBatchContainers(object):
         extra_opts = "/persistent:Yes"
         win_opts = "-Persist"
         if self.config["ACR"]["PLATFORM"] == "windows":
-            self.mount_path = "S"
+            self.mount_path = "Z"
             mount_options = win_opts
         else:
             self.mount_path = "azfiles"
@@ -222,6 +242,17 @@ class AzureBatchContainers(object):
         else:
             fileshare_mount = None
 
+        if use_vnet:
+            # add subnet, NAT rules, and public IPs
+            # https://docs.microsoft.com/en-us/python/api/azure-batch/azure.batch.models.networkconfiguration?view=azure-python
+            network_config = batchmodels.NetworkConfiguration(
+                subnet_id=self.config["VNET"]["SUBNET_ID"],
+                # endpoint_configuration=self.config["VNET"]["ENDPOINT_CONFIG"],
+                # public_ips=self.config["VNET"]["PUBLIC_IPS"],
+            )
+        else:
+            network_config = None
+
         if app_insights:
             # must run in admin mode
             user = batch.models.AutoUserSpecification(
@@ -233,7 +264,9 @@ class AzureBatchContainers(object):
             elif self.config["ACR"]["PLATFORM"] == "windows":
                 command_line = 'cmd /c @/"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe/" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command /"iex ((New-Object System.Net.WebClient).DownloadString(\'https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/1.x/run-windows.ps1\'))/"'
             else:
-                raise ValueError(f"Unknown platform selected {self.config['ACR']['PLATFORM']}")
+                raise ValueError(
+                    f"Unknown platform selected {self.config['ACR']['PLATFORM']}"
+                )
             start_task = batch.models.StartTask(
                 command_line=command_line,
                 user_identity=batch.models.UserIdentity(auto_user=user),
@@ -272,9 +305,10 @@ class AzureBatchContainers(object):
             target_low_priority_nodes=pool_low_priority_node_count,
             mount_configuration=fileshare_mount,
             start_task=start_task,
+            network_configuration=network_config,
         )
 
-        if not skip_if_exists or not self.batch_client.pool.exists(pool_id):
+        if use_vnet or not skip_if_exists or not self.batch_client.pool.exists(pool_id):
             logger.warning(
                 "Creating new pool named [bold magenta]{}[/bold magenta]".format(
                     pool_id
@@ -492,6 +526,7 @@ class AzureBatchContainers(object):
         wait_time: int = 10,
         delay_next: int = 0,
         app_insights: bool = True,
+        use_vnet: bool = False,
     ):
         """Hub to run Bonsai scale-sim job. This adds the command as tasks to run on the current job_id. The command pulls config['POOL']['PYTHON_EXEC']."""
 
@@ -509,7 +544,9 @@ class AzureBatchContainers(object):
             )
             time.sleep(wait_time)
 
-        self.create_pool(use_fileshare=log_iterations, app_insights=app_insights)
+        self.create_pool(
+            use_fileshare=log_iterations, app_insights=app_insights, use_vnet=use_vnet
+        )
         self.add_job()
 
         if not brain_name:
@@ -607,14 +644,15 @@ def run_tasks(
     vm_sku: str = None,
     config_file: str = user_config,
     log_iterations: Union[bool, str] = False,
-    workdir: str = "/src",
+    workdir: str = None,
     image_name: str = None,
     image_version: str = None,
     platform: str = None,
     show_price: bool = True,
     wait_time: int = 10,
     time_delay: int = 0,
-    app_insights: bool = True,
+    app_insights: bool = False,
+    use_vnet: bool = False,
 ):
     """Run simulators in Azure Batch.
 
@@ -662,6 +700,8 @@ def run_tasks(
         time to delay next task, by default 0
     app_insights: bool, optional
         whether to use application_insights to monitor azure batch pools
+    use_vnet: bool, optional
+        whether your batch pool should be provisioned in a (pre-existing) virtual network
     """
 
     if not os.path.exists(config_file):
@@ -669,7 +709,8 @@ def run_tasks(
 
     config = configparser.ConfigParser()
     config.read(config_file)
-    platform = config["ACR"]["PLATFORM"]
+    if not platform:
+        platform = config["ACR"]["PLATFORM"]
 
     if not task_to_run:
         task_to_run = input(
@@ -766,6 +807,9 @@ def run_tasks(
     with open(config_file, "w") as conf_file:
         config.write(conf_file)
 
+    if use_vnet and not use_service_principal:
+        raise ValueError("You must use a service principal to use a virtual network.")
+
     batch_run = AzureBatchContainers(
         config_file=config_file,
         service_principal=use_service_principal,
@@ -780,6 +824,12 @@ def run_tasks(
     if type(log_iterations) == str:
         log_iterations = bool(strtobool(log_iterations))
 
+    if workdir == None:
+        workdir = config["POOL"]["TASK_START_DIR"]
+        logger.info(
+            f"Start directory not specified, using location specified in config file: {workdir}"
+        )
+
     batch_run.batch_main(
         command=task_to_run,
         log_iterations=log_iterations,
@@ -788,6 +838,7 @@ def run_tasks(
         wait_time=wait_time,
         delay_next=time_delay,
         app_insights=app_insights,
+        use_vnet=use_vnet,
     )
 
 
@@ -915,7 +966,7 @@ def run_sims_connect(
     brain_list = json.loads(subprocess.check_output(brain_list_cmd.split(" ")))["value"]
     if brain_name not in brain_list:
         logger.warn(f"No brain {brain_name} found, creating...")
-        create_brain = f"bonsai brain create -n {brain_name} --description {notes}"
+        create_brain = f"bonsai brain create -n {brain_name}"
         logger.debug(create_brain)
         subprocess.check_output(create_brain.split(" "))
     else:
@@ -949,6 +1000,8 @@ def run_sims_connect(
             logger.info(
                 f"Pushing inkling to brain name {brain_name} and brain-version {brain_version}"
             )
+            # update_notes = f"bonsai brain version update -n {brain_name} --version {brain_version} --notes {notes}"
+            # subprocess.check_output(update_notes.split(" "))
             push_ink = f"bonsai brain version update-inkling -f {ink_file} -n {brain_name} --version {brain_version}"
             logger.debug(push_ink)
             subprocess.check_output(push_ink.split(" "))
@@ -1012,6 +1065,54 @@ def run_sims_connect(
     return brain_status
 
 
+def get_assessments(brain_name: str, brain_version: str):
+    assessments_status = f"bonsai brain version assessment list -b {brain_name} --brain-version {brain_version} -o json"
+    assessment_statuses = json.loads(
+        subprocess.check_output(assessments_status.split(" "))
+    )
+    return pd.DataFrame(assessment_statuses)
+
+
+def run_assessment(
+    brain_name: str,
+    brain_version: str,
+    concept_name: str,
+    assess_file: str,
+    assess_name: str,
+    episode_limit: int,
+    sim_package: str,
+    num_instances: int,
+):
+
+    assessments_status = f"bonsai brain version assessment list -b {brain_name} --brain-version {brain_version} -o json"
+    assessment_statuses = json.loads(
+        subprocess.check_output(assessments_status.split(" "))
+    )
+
+    still_running_assess = not (
+        all(pd.DataFrame(assessment_statuses)["status"] == "Succeeded")
+    )
+    while still_running_assess:
+        logger.info(
+            f"Assessment currently in progress for {brain_name} and version: {brain_version}, waiting for it to finish"
+        )
+        time.sleep(60)
+        assessments_status = f"bonsai brain version assessment list -b {brain_name} --brain-version {brain_version} -o json"
+        assessment_statuses = json.loads(
+            subprocess.check_output(assessments_status.split(" "))
+        )
+        still_running_assess = not (
+            all(pd.DataFrame(assessment_statuses)["status"] == "Succeeded")
+        )
+
+    assess_cmd = f"bonsai brain version assessment start -b {brain_name} --brain-version {brain_version} -c {concept_name} -f {assess_file} -n {assess_name} --episode-iteration-limit {episode_limit} --simulator-package-name {sim_package} -i {num_instances}"
+    logger.debug(assess_cmd)
+    logger.info(f"Starting assessment on {brain_name} and version {brain_version}")
+    assess_result = subprocess.check_output(assess_cmd.split(" "))
+
+    return assess_result
+
+
 def get_brain_status(brain_name: str, brain_version: str, sleep_time):
 
     brain_cmd = (
@@ -1030,7 +1131,10 @@ def get_brain_status(brain_name: str, brain_version: str, sleep_time):
 
 
 def connect_sims(
-    sim_name: str, brain_name: str, brain_version: str, concept_name: str,
+    sim_name: str,
+    brain_name: str,
+    brain_version: str,
+    concept_name: str,
 ):
 
     logger.info(f"Connecting simulators {sim_name} to {brain_name}:{brain_version}")
@@ -1055,6 +1159,13 @@ def connect_sims(
 if __name__ == "__main__":
 
     fire.Fire()
+    # run_tasks(
+    # task_to_run="python main.py",
+    # num_tasks=10,
+    # vm_sku="Standard_E2s_v3",
+    # use_service_principal=True,
+    # use_vnet=True
+    # )
     # nodes = list_pool_nodes(pool_name="PowerMount999")
     # run_tasks(image_name="winhouse")
     # batch_run = AzureBatchContainers(config_file=user_config)
